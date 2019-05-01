@@ -2,27 +2,24 @@
 
 #include <chrono>
 
-class Benchmark
+template <typename T>
+class Benchmark final
 {
 public:
-  inline Benchmark() : start( clock::now() ) {}
-
-  template <typename T>
-  inline T reset()
-  {
+  inline Benchmark(T& ref)
+    : start( clock::now() ), ref(ref) {
+    ref = T();
+  }
+  ~Benchmark() {
     const auto now = clock::now();
     const auto ret = std::chrono::duration_cast<T>(now - start);
-    start = now;
-    return ret;
+    ref = std::chrono::duration_cast<T>(now - start);
   }
 
-  template <typename T>
-  inline void reset( T& v )
-  {
-    v = reset<T>();
-  }
 private:
   using clock = std::chrono::steady_clock;
   using time_point = clock::time_point;
   time_point start;
+  T& ref;
+
 };
