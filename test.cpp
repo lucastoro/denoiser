@@ -8,15 +8,19 @@
 using namespace std::chrono_literals;
 
 class ArtifactDenoiserTest : public testing::Test {
+public:
+  virtual void SetUp() override {
+    set_log_level(LOG_DEBUG);
+  }
 };
 
-TEST(ArtifactDenoiserTest, local) {
+TEST_F(ArtifactDenoiserTest, local) {
   const auto x = log::file<wchar_t>("test/config.yaml");
   ASSERT_EQ(x.size(), 12);
   x.profile();
 }
 
-TEST(ArtifactDenoiserTest, http) {
+TEST_F(ArtifactDenoiserTest, http) {
   curlpp::Easy request;
   request.setOpt(curlpp::options::Url("http://www.example.com"));
   const auto x = log::file<wchar_t>(request);
@@ -24,7 +28,7 @@ TEST(ArtifactDenoiserTest, http) {
   x.profile();
 }
 
-TEST(ArtifactDenoiserTest, https) {
+TEST_F(ArtifactDenoiserTest, https) {
   curlpp::Easy request;
   request.setOpt(curlpp::options::Url("https://www.example.com"));
   const auto x = log::file<wchar_t>(request);
@@ -32,11 +36,11 @@ TEST(ArtifactDenoiserTest, https) {
   x.profile();
 }
 
-TEST(ArtifactDenoiserTest, large) {
+TEST_F(ArtifactDenoiserTest, large) {
   curlpp::Easy request;
-  request.setOpt(curlpp::options::Url("http://jenkins.brightcomputing.com/view/tpsi%20trunk/job/trunk-c7u5-tpsi-ceph/lastSuccessfulBuild/artifact/logs/node-installer.log"));
+  request.setOpt(curlpp::options::Url("https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/drivers/gpu/drm/amd/include/asic_reg/nbio/nbio_6_1_sh_mask.h"));
   const auto x = log::file<wchar_t>(request);
-  ASSERT_EQ(x.size(), 48564);
+  ASSERT_EQ(x.size(), 133634);
   x.profile();
 }
 

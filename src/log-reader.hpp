@@ -184,7 +184,9 @@ public:
   }
 
   void profile() const {
-    info("read : " << perf.read.count() << " ms");
+    const auto MB = data.size() / 1048576.0;
+    const auto sec = perf.read.count() / 1000.0;
+    info("read : " << perf.read.count() << " ms (" << MB/sec << " MB/sec)");
     info("parse: " << perf.parse.count() << " ms");
   }
 
@@ -283,21 +285,24 @@ private:
         static const std::regex charset_rx(R"(charset=([^ ]+))", std::regex::optimize);
         std::cmatch charset;
         if (std::regex_search(ctype[1].first, ctype[1].second, charset, charset_rx) and 2 == charset.size()) {
-          static constexpr const char utf8[] = "utf-8";
-          static constexpr const char ascii[] = "us-ascii";
-          static constexpr const char latin1[] = "iso-8859-1";
-          if (std::equal(charset[1].first, charset[1].second, utf8, utf8 + sizeof(utf8) - 1, icase)) {
-            debug("using encoding: utf8");
-            decode = encoding::UTF8<char_t>;
-          } else if (std::equal(charset[1].first, charset[1].second, ascii, ascii + sizeof(ascii) - 1, icase)) {
-            debug("using encoding: ascii");
-            decode = encoding::ASCII<char_t>;
-          } else if (std::equal(charset[1].first, charset[1].second, latin1, latin1 + sizeof(latin1) - 1, icase)) {
-            debug("using encoding: latin1");
-            decode = encoding::LATIN1<char_t>;
-          } else {
+
+          bool found = false;
+
+          for (const auto& enco : encodings) {
+            const auto b = enco.first;
+            const auto e = enco.first + strlen(enco.first);
+            if (std::equal(charset[1].first, charset[1].second, b, e, icase)) {
+              debug("using encoding: utf8");
+              decode = enco.second;
+              found = true;
+              break;
+            }
+          }
+
+          if (not found) {
             warning("unknown content type: " << std::string_view(charset[1].first, size_t(charset[1].length())));
           }
+
         } else {
           debug("Content-Type received, but missing encoding, defaulting to latin1");
           decode = encoding::LATIN1<char_t>;
@@ -305,6 +310,12 @@ private:
       }
       return size;
     }
+
+    static constexpr std::pair<const char*, encoding_t> encodings[] = {
+      {"utf-8", encoding::UTF8<char_t>},
+      {"us-ascii", encoding::ASCII<char_t>},
+      {"iso-8859-1", encoding::LATIN1<char_t>},
+    };
 
     curlpp::Easy& request;
     data_t& data;
@@ -369,8 +380,7 @@ private:
 
   std::deque<line_t> table;
 
-  struct
-  {
+  struct {
     std::chrono::milliseconds read;
     std::chrono::milliseconds parse;
   } perf;
