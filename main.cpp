@@ -346,12 +346,25 @@ int main(int argc, char** argv)
 
         const curlpp::Cleanup curlpp_;
 
+        std::string current;
+
         for (const auto& artifact : artifacts) {
-          future.emplace_back( std::async([&artifact](){
-            process(artifact, [](const auto& line){
-              // std::wcout << line.number << " " << line.content << std::endl;
+          future.emplace_back( std::async([&artifact, &current](){
+            process(artifact, [&current](const auto& line){
+              if (current != line.source) {
+                if (!current.empty()) {
+                  std::cout << "--- end " << current << " ---" << std::endl;
+                }
+                current = line.source;
+                std::cout << "--- begin " << current << " ---" << std::endl;
+              }
+              std::wcout << line.number << " " << line.content << std::endl;
             });
           }));
+        }
+
+        if (!current.empty()) {
+          std::cout << "--- end " << current << " ---" << std::endl;
         }
       }
     });
