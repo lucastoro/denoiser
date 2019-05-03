@@ -4,6 +4,16 @@
 #include <sstream>
 #include <cstddef>
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <unistd.h>
+#include <string.h>
+#include <time.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <sys/time.h>
+
 #define LOG_CRITICAL 0
 #define LOG_ERROR    1
 #define LOG_WARNING  2
@@ -15,10 +25,27 @@ extern size_t log_level;
 
 void set_log_level(size_t);
 
+using tid_t = pid_t;
+
+#define gettid() syscall(SYS_gettid)
+
+static inline const char* gettime() {
+  thread_local char temp[128] = "";
+
+  struct timeval tv;
+  struct tm tm;
+  gettimeofday(&tv, nullptr);
+  localtime_r(&tv.tv_sec, &tm);
+
+  snprintf(temp, sizeof(temp), "%02d:%02d:%02d.%03ld", tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec / 1000);
+
+  return temp;
+}
+
 #define logging(file, PREFIX, lvl, ...) do { \
   if(log_level >= lvl) { \
     std::stringstream ss; \
-    ss << PREFIX " " << __VA_ARGS__ << std::endl; \
+    ss << PREFIX " T" << gettid() << " " << gettime() << " | " << __VA_ARGS__ << std::endl; \
     file << ss.str() << std::flush; \
   } \
 } while(false)

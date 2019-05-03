@@ -23,7 +23,7 @@ public:
 
   using char_t = CharT;
   using pointer = char_t*;
-  using const_pointer = const pointer;
+  using const_pointer = const char_t*;
   using string_view = std::basic_string_view<char_t>;
   using iterator = pointer;
   using const_iterator = const_pointer;
@@ -41,10 +41,6 @@ public:
   }
 
   string_view str() const noexcept {
-    return ptr_ ? string_view(ptr_, size_) : string_view();
-  }
-
-  string_view original() const noexcept {
     return string_view(original_ptr_, size_);
   }
 
@@ -75,17 +71,10 @@ public:
     return true;
   }
 
-  const_iterator begin() const noexcept {
-    return ptr_;
-  }
-
-  const_iterator end() const noexcept {
-    return ptr_ + size_;
-  }
 
   size_t hash() const noexcept {
     if (0 == hash_) {
-      hash_ = std::hash<std::basic_string_view<char_t>>()(str());
+      hash_ = std::hash<std::basic_string_view<char_t>>()(mut());
     }
     return hash_;
   }
@@ -97,12 +86,24 @@ public:
 
 private:
 
+  const string_view mut() const noexcept {
+    return ptr_ ? string_view(ptr_, size_) : string_view();
+  }
+
+  const_iterator begin() const noexcept {
+    return ptr_ ? ptr_ : reinterpret_cast<const_pointer>(this);
+  }
+
+  const_iterator end() const noexcept {
+    return ptr_ ? (ptr_ + size_) : reinterpret_cast<const_pointer>(this);
+  }
+
   iterator begin() noexcept {
-    return ptr_;
+    return ptr_ ? ptr_ : reinterpret_cast<pointer>(this);
   }
 
   iterator end() noexcept {
-    return ptr_ + size_;
+    return ptr_ ? (ptr_ + size_) : reinterpret_cast<pointer>(this);
   }
 
   char_t* ptr_;
@@ -260,16 +261,7 @@ private:
       }
 
       for (size_t s = 0; s < size; ++s) {
-        if (ptr[s] < 0) {
-          std::cout << feeder.size() << std::endl;
-          for (const auto& x : feeder) {
-            std::cout << x;
-          }
-          std::cout << std::endl;
-          feeder.push(ptr[s]);
-        } else {
-          feeder.push(ptr[s]);
-        }
+        feeder.push(ptr[s]);
         CharT c;
         switch(decode(feeder, c)) {
           case encoding::ok:
@@ -280,17 +272,8 @@ private:
           case encoding::error:
             enforce(false, "bad");
             break;
-          case encoding::incomplete: {
-            debug("hmmm, in partial buffer " << s << "/" << size);
-            debug("char following +" <<data.size() << " is -1?");
-            std::cerr << "\"";
-            for (auto pre = std::min(10UL, data.size()); pre > 0; --pre ) {
-              std::wcerr << data.imm.at(data.size() - pre);
-            }
-            std::cerr << "\"";
-            std::cerr << std::endl << std::flush;
+          case encoding::incomplete:
             break;
-          }
         }
 
       }
