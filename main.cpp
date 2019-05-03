@@ -29,6 +29,7 @@ struct denoiser {
 
 template <typename CharT>
 struct artifact {
+  std::string alias;
   std::string target;
   std::vector<std::string> reference;
   denoiser<CharT> rules;
@@ -36,19 +37,83 @@ struct artifact {
 
 template <typename CharT>
 struct Line {
-  Line(const std::basic_string_view<CharT>& c, size_t n, size_t t)
-    : content(c), number(n), total(t) {}
+  Line(const std::basic_string_view<CharT>& c, size_t n, const std::string& s, size_t t)
+    : content(c), number(n), source(s), total(t) {}
   std::basic_string_view<CharT> content;
   size_t number;
+  const std::string& source;
   size_t total;
 };
 
-template <typename T, typename I = std::chrono::milliseconds>
-static inline void profile(const char* name, const T& lambda) {
-  const auto a = std::chrono::steady_clock::now();
+template <typename R, typename T>
+static inline R profile(const std::string& name, const T& lambda) {
+
+  using namespace std::chrono;
+  using clock = steady_clock;
+
+  const auto a = clock::now();
+  R r = lambda();
+  const auto b = clock::now();
+
+  if (duration_cast<microseconds>(b - a).count() < 1000) {
+    debug(name << " done in " << duration_cast<microseconds>(b - a).count() << " us");
+    return r;
+  }
+
+  if (duration_cast<milliseconds>(b - a).count() < 1000) {
+    const auto ms = duration_cast<microseconds>(b - a).count() / 1000;
+    const auto us = duration_cast<microseconds>(b - a).count() % 1000;
+    debug(name << " done in " << ms << "." << us << " ms");
+    return r;
+  }
+
+  if (duration_cast<seconds>(b - a).count() < 60) {
+    const auto sec = duration_cast<milliseconds>(b - a).count() / 1000;
+    const auto ms = duration_cast<milliseconds>(b - a).count() % 1000;
+    debug(name << " done in " << sec << "." << ms << " sec");
+    return r;
+  }
+
+  const auto min = duration_cast<seconds>(b - a).count() / 60;
+  const auto sec = duration_cast<seconds>(b - a).count() % 60;
+
+  debug(name << " done in " << min << " min, " << sec << " sec");
+  return r;
+}
+
+template <typename T>
+static inline void profile(const std::string& name, const T& lambda) {
+
+  using namespace std::chrono;
+  using clock = steady_clock;
+
+  const auto a = clock::now();
   lambda();
-  const auto b = std::chrono::steady_clock::now();
-  debug(name << " done in " << std::chrono::duration_cast<I>(b - a).count() << " ms");
+  const auto b = clock::now();
+
+  if (duration_cast<microseconds>(b - a).count() < 1000) {
+    debug(name << " done in " << duration_cast<microseconds>(b - a).count() << " us");
+    return;
+  }
+
+  if (duration_cast<milliseconds>(b - a).count() < 1000) {
+    const auto ms = duration_cast<microseconds>(b - a).count() / 1000;
+    const auto us = duration_cast<microseconds>(b - a).count() % 1000;
+    debug(name << " done in " << ms << "." << us << " ms");
+    return;
+  }
+
+  if (duration_cast<seconds>(b - a).count() < 60) {
+    const auto sec = duration_cast<milliseconds>(b - a).count() / 1000;
+    const auto ms = duration_cast<milliseconds>(b - a).count() % 1000;
+    debug(name << " done in " << sec << "." << ms << " sec");
+    return;
+  }
+
+  const auto min = duration_cast<seconds>(b - a).count() / 60;
+  const auto sec = duration_cast<seconds>(b - a).count() % 60;
+
+  debug(name << " done in " << min << " min, " << sec << " sec");
 }
 
 static std::mutex global_lock;
@@ -58,92 +123,96 @@ void process(
     const artifact<CharT>& artifact,
     Lambda lambda) {
 
-  std::unordered_set<size_t> bucket;
-  std::mutex mutex;
+  profile("processing " + artifact.alias, [&](){
 
-  const auto prepare = [](
-      const std::string& url,
-      const denoiser<CharT>& rules
-      ) -> log::file<CharT> {
+    std::unordered_set<size_t> bucket;
+    std::mutex mutex;
 
-    debug("downloading " << url << "...");
-    curlpp::Easy request;
-    request.setOpt(curlpp::options::Url(url));
-    log::file<CharT> file(request);
+    const auto prepare = [](
+        const std::string& url,
+        const std::string& alias,
+        const denoiser<CharT>& rules
+        ) -> log::file<CharT> {
 
-    profile("filtering", [&](){
-      for (const auto& pattern : rules.filters) {
-        for (auto& line : file) {
-          if (line.contains(pattern)) {
-            line.suppress();
+      auto file = profile<log::file<CharT>>("downloading " + alias, [&](){
+        curlpp::Easy request;
+        request.setOpt(curlpp::options::Url(url));
+        return log::file<CharT>(request);
+      });
+
+      profile("filtering " + alias, [&](){
+        for (const auto& pattern : rules.filters) {
+          for (auto& line : file) {
+            if (line.contains(pattern)) {
+              line.suppress();
+            }
           }
         }
-      }
-    });
+      });
 
-    profile("normalizing", [&](){
-      for (const auto& pattern : rules.normalizers) {
-        for (auto& line : file) {
-          line.remove(pattern);
+      profile("normalizing " + alias, [&](){
+        for (const auto& pattern : rules.normalizers) {
+          for (auto& line : file) {
+            line.remove(pattern);
+          }
         }
+      });
+
+      return file;
+    };
+
+    const auto do_process = [&bucket, &mutex, &prepare](
+        const std::string& url,
+        const std::string& alias,
+        const denoiser<CharT>& rules
+        ) -> void {
+
+      auto file = prepare(url, alias, rules);
+
+      profile("filling the bucket " + alias, [&](){
+        std::lock_guard<std::mutex> lock(mutex);
+        const auto bucket_size = (file.size() * 3) / 2;
+        if(bucket.size() < bucket_size) {
+          bucket.reserve(bucket_size);
+        }
+        for (auto& line : file) {
+          bucket.insert(line.hash());
+        }
+      });
+    };
+
+    std::vector<std::future<void>> f_refs;
+    f_refs.reserve(artifact.reference.size());
+    for (const auto& ref : artifact.reference) {
+      f_refs.emplace_back(std::async(do_process, ref, artifact.alias, artifact.rules) );
+    }
+
+    const auto file = prepare(artifact.target, artifact.alias, artifact.rules);
+
+    for (const auto& f_ref : f_refs) {
+      f_ref.wait();
+    }
+
+    const size_t total = file.size();
+    size_t current = 0;
+
+    profile("calculating hashes for " + artifact.alias, [&](){
+      for (const auto& line : file) {
+        line.hash();
       }
     });
 
-    return file;
-  };
+    global_lock.lock();
 
-  const auto do_process = [&bucket, &mutex, &prepare](
-      const std::string& url,
-      const denoiser<CharT>& rules
-      ) -> void {
-
-    auto file = prepare(url, rules);
-
-    profile("filling the bucket", [&](){
-      std::lock_guard<std::mutex> lock(mutex);
-      const auto bucket_size = (file.size() * 3) / 2;
-      if(bucket.size() < bucket_size) {
-        bucket.reserve(bucket_size);
-      }
-      for (auto& line : file) {
-        bucket.insert(line.hash());
-      }
-    });
-  };
-
-  std::vector<std::future<void>> f_refs;
-  f_refs.reserve(artifact.reference.size());
-  for (const auto& ref : artifact.reference) {
-    f_refs.emplace_back(std::async(do_process, ref, artifact.rules) );
-  }
-
-  const auto file = prepare(artifact.target, artifact.rules);
-
-  for (const auto& f_ref : f_refs) {
-    f_ref.wait();
-  }
-
-  const size_t total = file.size();
-  size_t current = 0;
-
-  profile("calculating hashes", [&](){
     for (const auto& line : file) {
-      line.hash();
+      ++current;
+      if (0 == bucket.count(line.hash())) {
+        lambda(Line<CharT>(line.str(), current, artifact.alias, total));
+      }
     }
+
+    global_lock.unlock();
   });
-
-  global_lock.lock();
-
-  debug("outputting: " << artifact.target);
-
-  for (const auto& line : file) {
-    ++current;
-    if (0 == bucket.count(line.hash())) {
-      lambda(Line<CharT>(line.str(), current, total));
-    }
-  }
-
-  global_lock.unlock();
 }
 
 template <typename CharT>
@@ -151,6 +220,7 @@ artifact<CharT> decodeArtifact(const YAML::Node& node) {
 
   artifact<CharT> out;
 
+  out.alias = node["alias"].as<std::string>();
   out.target = node["target"].as<std::string>();
 
   for (const auto& ref : node["reference"]) {
@@ -158,7 +228,6 @@ artifact<CharT> decodeArtifact(const YAML::Node& node) {
   }
 
   {
-
     static constexpr const wchar_t* filters[] = {
       LR"(Seen branch in repository)",
       LR"(Checking out Revision)",
@@ -263,7 +332,10 @@ int main(int argc, char** argv)
       if (FLAGS_debug) {
         debug(artifacts.size() << " artifacts:");
         for (const auto& artifact : artifacts) {
-          debug(" - " << artifact.target);
+          debug(" - " << artifact.alias << "(" << artifact.target << ")");
+          for (const auto& ref : artifact.reference) {
+            debug("   - " << ref);
+          }
         }
       }
 
@@ -277,7 +349,7 @@ int main(int argc, char** argv)
         for (const auto& artifact : artifacts) {
           future.emplace_back( std::async([&artifact](){
             process(artifact, [](const auto& line){
-              std::wcout << line.number << " " << line.content << std::endl;
+              // std::wcout << line.number << " " << line.content << std::endl;
             });
           }));
         }
