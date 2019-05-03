@@ -15,8 +15,11 @@ public:
 };
 
 TEST_F(ArtifactDenoiserTest, local) {
-  const auto x = log::file<wchar_t>("test/config.yaml");
-  ASSERT_EQ(x.size(), 12);
+  const auto x = log::file<wchar_t>("test/utf8.txt");
+  ASSERT_EQ(x.size(), 3);
+  ASSERT_EQ(x.at(0).str().at(0), 'A');
+  ASSERT_EQ(x.at(1).str().at(0), 0x00A9);
+  ASSERT_EQ(x.at(2).str().at(0), 0x2764);
   x.profile();
 }
 

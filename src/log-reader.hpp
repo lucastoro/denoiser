@@ -3,7 +3,9 @@
 #include <string_view>
 #include <vector>
 #include <deque>
+#include <queue>
 #include <regex>
+#include <fstream>
 
 #include "curlpp/cURLpp.hpp"
 #include "curlpp/Easy.hpp"
@@ -116,17 +118,17 @@ public:
   using char_t = CharT;
   using string_view = std::basic_string_view<char_t>;
   using line_t = line<char_t>;
-  using encoding_t = char_t (*)(std::istream&);
+  using encoding_t = encoding::encoder<CharT>;
 
-  inline file(std::istream& stream, encoding_t decode = encoding::UTF8<char_t>) {
-    read_stream(stream, decode);
+  inline file(std::istream& stream) {
+    read_stream(stream);
     build_table();
   }
 
-  inline file(const char* filename, encoding_t decode = encoding::UTF8<char_t>) {
+  inline file(const char* filename) {
     std::ifstream stream(filename, std::ios_base::in | std::ios_base::binary);
     if (stream.is_open()) {
-      read_stream(stream, decode);
+      read_stream(stream);
       build_table();
     }
   }
@@ -214,7 +216,7 @@ private:
       mut.clear();
       imm.clear();
     }
-    char_t* to_imm(char_t* mptr) {
+    inline const char_t* to_imm(const char_t* mptr) const {
       return std::next(imm.data(), std::distance(mut.data(), mptr));
     }
   } data;
@@ -254,12 +256,43 @@ private:
 
       if (not decode) {
         warning("unknown encoding, defaulting to UTF8");
-        decode = encoding::UTF8<char_t>;
+        decode = encoding::UTF8;
       }
 
       for (size_t s = 0; s < size; ++s) {
-        ss.put(ptr[s]);
-        data.push_back(decode(ss));
+        if (ptr[s] < 0) {
+          std::cout << feeder.size() << std::endl;
+          for (const auto& x : feeder) {
+            std::cout << x;
+          }
+          std::cout << std::endl;
+          feeder.push(ptr[s]);
+        } else {
+          feeder.push(ptr[s]);
+        }
+        CharT c;
+        switch(decode(feeder, c)) {
+          case encoding::ok:
+            data.push_back(c);
+            break;
+          case encoding::end:
+            break;
+          case encoding::error:
+            enforce(false, "bad");
+            break;
+          case encoding::incomplete: {
+            debug("hmmm, in partial buffer " << s << "/" << size);
+            debug("char following +" <<data.size() << " is -1?");
+            std::cerr << "\"";
+            for (auto pre = std::min(10UL, data.size()); pre > 0; --pre ) {
+              std::wcerr << data.imm.at(data.size() - pre);
+            }
+            std::cerr << "\"";
+            std::cerr << std::endl << std::flush;
+            break;
+          }
+        }
+
       }
       return size;
     }
@@ -305,21 +338,21 @@ private:
 
         } else {
           debug("Content-Type received, but missing encoding, defaulting to latin1");
-          decode = encoding::LATIN1<char_t>;
+          decode = encoding::LATIN1;
         }
       }
       return size;
     }
 
     static constexpr std::pair<const char*, encoding_t> encodings[] = {
-      {"utf-8", encoding::UTF8<char_t>},
-      {"us-ascii", encoding::ASCII<char_t>},
-      {"iso-8859-1", encoding::LATIN1<char_t>},
+      {"utf-8", encoding::UTF8},
+      {"us-ascii", encoding::ASCII},
+      {"iso-8859-1", encoding::LATIN1},
     };
 
     curlpp::Easy& request;
     data_t& data;
-    std::stringstream ss;
+    encoding::buffered_feeder feeder;
     encoding_t decode;
   };
 
@@ -335,16 +368,43 @@ private:
     dowloader(request, data).perform();
   }
 
-  inline void read_stream(std::istream& stream, encoding_t decode) {
-    Benchmark bench(perf.read);
-    stream.seekg(0, std::ios_base::seekdir::_S_end);
-    const auto size = stream.tellg();
-    stream.seekg(0);
-    data.clear();
-    data.reserve(size_t(size));
-    for (auto c = decode(stream); EOF != c; c = decode(stream)) {
-      data.push_back(c);
+  class loader {
+  public:
+    loader(std::istream& stream, data_t& data) : feeder(stream), stream(stream), data(data), decode(encoding::UTF8) {}
+    void perform() {
+      stream.seekg(0, std::ios_base::seekdir::_S_end);
+      const auto size = stream.tellg();
+      stream.seekg(0);
+      data.clear();
+      data.reserve(size_t(size));
+      bool stop = false;
+      while (not stop) {
+        CharT c;
+        switch(decode(feeder, c)) {
+          case encoding::ok:
+            data.push_back(c);
+            break;
+          case encoding::end:
+            stop = true;
+            break;
+          case encoding::error:
+          case encoding::incomplete:
+            error("bad char");
+            stop = true;
+            break;
+        }
+      }
     }
+  private:
+    encoding::istream_feeder feeder;
+    std::istream& stream;
+    data_t& data;
+    encoding_t decode;
+  };
+
+  inline void read_stream(std::istream& stream) {
+    Benchmark bench(perf.read);
+    loader(stream, data).perform();
   }
 
   inline void build_table() {
