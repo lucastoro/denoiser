@@ -132,12 +132,12 @@ void process(
         const std::string& url,
         const std::string& alias,
         const denoiser<CharT>& rules
-        ) -> log::file<CharT> {
+        ) -> log::basic_file<CharT> {
 
-      auto file = profile<log::file<CharT>>("downloading " + alias, [&](){
+      auto file = profile<log::basic_file<CharT>>("downloading " + alias, [&](){
         curlpp::Easy request;
         request.setOpt(curlpp::options::Url(url));
-        return log::file<CharT>(request);
+        return log::basic_file<CharT>(request);
       });
 
       profile("filtering " + alias, [&](){

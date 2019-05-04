@@ -12,13 +12,12 @@
 #include "curlpp/Options.hpp"
 
 #include "encoding.hpp"
-#include "benchmark.hpp"
 #include "logging.hpp"
 
 namespace log {
 
 template <typename CharT>
-class line {
+class basic_line {
 public:
 
   using char_t = CharT;
@@ -28,11 +27,11 @@ public:
   using iterator = pointer;
   using const_iterator = const_pointer;
 
-  line() noexcept
+  basic_line() noexcept
     : ptr_(nullptr), size_(0), hash_(0)
   {}
 
-  line(char_t* ptr, const char_t* optr, size_t size) noexcept
+  basic_line(char_t* ptr, const char_t* optr, size_t size) noexcept
     : ptr_(ptr), original_ptr_(optr), size_(size), hash_(0)
   {}
 
@@ -79,8 +78,7 @@ public:
     return hash_;
   }
 
-  bool operator == ( const line<char_t>& other ) const noexcept {
-    // return other.str() == str();
+  bool operator == ( const basic_line<char_t>& other ) const noexcept {
     return hash() != other.hash();
   }
 
@@ -113,46 +111,62 @@ private:
 };
 
 template <typename CharT = wchar_t>
-class file final {
+class basic_file final {
 public:
 
   using char_t = CharT;
   using string_view = std::basic_string_view<char_t>;
-  using line_t = line<char_t>;
-  using encoding_t = encoding::encoder<CharT>;
+  using line_t = basic_line<char_t>;
+  using encoding_t = encoding::basic_encoder<char_t>;
 
-  inline file(std::istream& stream) {
-    read_stream(stream);
+  class exception : std::runtime_error {
+  public:
+    template <typename ...Args>
+    inline exception(Args... args) noexcept
+      : std::runtime_error(args...) {}
+  };
+
+  class not_found : public exception {
+  public:
+    template <typename ...Args>
+    inline not_found(Args... args) noexcept
+      : exception(args...) {}
+  };
+
+  class encoding_error : public exception {
+  public:
+    template <typename ...Args>
+    inline encoding_error(Args... args) noexcept
+      : exception(args...) {}
+  };
+
+  inline basic_file(const char* filename, encoding_t decoder = encoding::UTF8) noexcept(false) {
+    std::ifstream stream(filename, std::ios_base::in | std::ios_base::binary);
+    if (not stream.is_open()) {
+      throw not_found(filename);
+    }
+    read_stream(stream, decoder);
     build_table();
   }
 
-  inline file(const char* filename) {
-    std::ifstream stream(filename, std::ios_base::in | std::ios_base::binary);
-    if (stream.is_open()) {
-      read_stream(stream);
-      build_table();
-    }
-  }
-
-  file(curlpp::Easy& request) {
-      download(request);
+  basic_file(curlpp::Easy& request, encoding_t decoder = nullptr) noexcept(false) {
+      download(request, decoder);
       build_table();
   }
 
-  file(file<char_t>&& other) {
+  basic_file(basic_file<char_t>&& other) {
       (*this) = std::move(other);
   }
 
-  const file<char_t>& operator = (file<char_t>&& other) {
+  const basic_file<char_t>& operator = (basic_file<char_t>&& other) {
       if (this != &other) {
           data = std::move(other.data);
           table = std::move(other.table);
-          perf = std::move(other.perf);
       }
       return *this;
   }
 
-  inline ~file() noexcept
+  inline ~basic_file() noexcept
   {}
 
   typedef typename std::deque<line_t>::const_iterator const_iterator;
@@ -186,13 +200,6 @@ public:
     return not table.empty();
   }
 
-  void profile() const {
-    const auto MB = data.size() / 1048576.0;
-    const auto sec = perf.read.count() / 1000.0;
-    info("read : " << perf.read.count() << " ms (" << MB/sec << " MB/sec)");
-    info("parse: " << perf.parse.count() << " ms");
-  }
-
 private:
 
   struct data_t {
@@ -224,53 +231,67 @@ private:
 
   class dowloader {
   public:
-    dowloader(curlpp::Easy& r, data_t& data)
-      : request(r), data(data), decode(nullptr) {
+    dowloader(curlpp::Easy& r, data_t& data, encoding_t decoder = nullptr)
+      : request(r), data(data), decode(decoder) {
       request.setOpt(curlpp::options::NoSignal(true));
       request.setOpt(curlpp::options::Header(false));
       request.setOpt(curlpp::options::NoProgress(false));
+      request.setOpt(curlpp::options::Timeout(5)); // sec
+      request.setOpt(curlpp::options::FailOnError(true));
 
       request.setOpt(curlpp::options::HeaderFunction(
       [this](char* data, size_t size, size_t count) -> size_t {
-        return this->onHeader(data, size * count);
+        return this->on_header(
+          const_cast<const uint8_t*>(reinterpret_cast<uint8_t*>(data)), size * count
+        );
       }));
 
       request.setOpt(curlpp::options::ProgressFunction(
       [this](double a, double b, double, double) -> int {
-        return this->onProgress(a, b);
+        return this->on_progress(a, b);
       }));
 
       request.setOpt(curlpp::options::WriteFunction(
-        [this](char* ptr, size_t size, size_t count) -> size_t {
-          return this->onData(ptr, size * count);
+        [this](char* data, size_t size, size_t count) -> size_t {
+          return this->on_data(
+            const_cast<const uint8_t*>(reinterpret_cast<uint8_t*>(data)), size * count
+          );
         })
       );
     }
 
     void perform() {
-      request.perform();
+      try {
+        request.perform();
+      } catch (const curlpp::LibcurlRuntimeError& ex) {
+        if (CURLE_COULDNT_RESOLVE_HOST == ex.whatCode()
+         or CURLE_HTTP_RETURNED_ERROR == ex.whatCode()) {
+          throw not_found(ex.what());
+        }
+        throw ex;
+      }
     }
 
   private:
 
-    size_t onData(char* ptr, size_t size) {
+    size_t on_data(const uint8_t* ptr, size_t size) {
 
-      if (not decode) {
-        warning("unknown encoding, defaulting to UTF8");
-        decode = encoding::UTF8;
+      if (nullptr == decode) {
+        decode = encoding::UTF8; // better safe than sorry
       }
 
       for (size_t s = 0; s < size; ++s) {
         feeder.push(ptr[s]);
-        CharT c;
-        switch(decode(feeder, c)) {
+        char_t c;
+        const auto result = decode(feeder, c);
+        switch (result) {
           case encoding::ok:
             data.push_back(c);
             break;
           case encoding::end:
             break;
           case encoding::error:
-            enforce(false, "bad");
+            throw encoding_error(result.message());
             break;
           case encoding::incomplete:
             break;
@@ -280,7 +301,7 @@ private:
       return size;
     }
 
-    int onProgress(double tot, double) {
+    int on_progress(double tot, double) {
       const auto x = size_t(tot);
       if (x > data.capacity()) {
         data.reserve(x);
@@ -288,37 +309,20 @@ private:
       return 0;
     }
 
-    static constexpr bool icase(int a, int b){
-      return (a == b) or (std::isalpha(a) and std::isalpha(b) and std::tolower(a) == std::tolower(b));
-    }
-
-    size_t onHeader(char* ptr, size_t size) {
+    size_t on_header(const uint8_t* ptr, size_t size) {
       static const std::regex ctype_rx(R"(^[Cc]ontent-[Tt]ype: (.+))", std::regex::optimize);
       std::cmatch ctype;
-      std::string_view header(ptr, size);
+      std::string_view header(reinterpret_cast<const char*>(ptr), size);
 
       if (std::regex_search(header.begin(), header.end(), ctype, ctype_rx) and 2 == ctype.size()) {
         static const std::regex charset_rx(R"(charset=([^ ]+))", std::regex::optimize);
         std::cmatch charset;
         if (std::regex_search(ctype[1].first, ctype[1].second, charset, charset_rx) and 2 == charset.size()) {
-
-          bool found = false;
-
-          for (const auto& enco : encodings) {
-            const auto b = enco.first;
-            const auto e = enco.first + strlen(enco.first);
-            if (std::equal(charset[1].first, charset[1].second, b, e, icase)) {
-              debug("using encoding: utf8");
-              decode = enco.second;
-              found = true;
-              break;
-            }
+          const auto ch = std::string_view(charset[1].first, size_t(charset[1].length()));
+          decode = encoding::get<char_t>(ch);
+          if (not decode) {
+            warning("unknown content type: " << ch);
           }
-
-          if (not found) {
-            warning("unknown content type: " << std::string_view(charset[1].first, size_t(charset[1].length())));
-          }
-
         } else {
           debug("Content-Type received, but missing encoding, defaulting to latin1");
           decode = encoding::LATIN1;
@@ -339,31 +343,33 @@ private:
     encoding_t decode;
   };
 
-  file(const file<char_t>&) = delete;
-  const file<char_t>& operator = (const file<char_t>&) = delete;
+  basic_file(const basic_file<char_t>&) = delete;
+  const basic_file<char_t>& operator = (const basic_file<char_t>&) = delete;
 
   static constexpr bool inline is_endline( char_t c ) noexcept {
     return (c == '\n' or c =='\r');
   }
 
-  inline void download(curlpp::Easy& request) {
-    Benchmark bench(perf.read);
-    dowloader(request, data).perform();
+  inline void download(curlpp::Easy& request, encoding_t decoder = nullptr) {
+    dowloader(request, data, decoder).perform();
   }
 
   class loader {
   public:
-    loader(std::istream& stream, data_t& data) : feeder(stream), stream(stream), data(data), decode(encoding::UTF8) {}
+    loader(std::istream& stream, data_t& data, encoding_t decoder = encoding::UTF8)
+      : feeder(stream), stream(stream), data(data), decode(decoder)
+    {}
     void perform() {
       stream.seekg(0, std::ios_base::seekdir::_S_end);
-      const auto size = stream.tellg();
+      const size_t size = stream.tellg();
       stream.seekg(0);
       data.clear();
-      data.reserve(size_t(size));
+      data.reserve(size);
       bool stop = false;
       while (not stop) {
-        CharT c;
-        switch(decode(feeder, c)) {
+        char_t c;
+        const auto result = decode(feeder, c);
+        switch (result) {
           case encoding::ok:
             data.push_back(c);
             break;
@@ -371,8 +377,11 @@ private:
             stop = true;
             break;
           case encoding::error:
+            throw encoding_error(result.message());
+            stop = true;
+            break;
           case encoding::incomplete:
-            error("bad char");
+            throw encoding_error("stram closed");
             stop = true;
             break;
         }
@@ -385,14 +394,12 @@ private:
     encoding_t decode;
   };
 
-  inline void read_stream(std::istream& stream) {
-    Benchmark bench(perf.read);
-    loader(stream, data).perform();
+  inline void read_stream(std::istream& stream, encoding_t encoder = encoding::UTF8) {
+    loader(stream, data, encoder).perform();
   }
 
   inline void build_table() {
 
-    Benchmark bench(perf.parse);
     char_t* current = data.mut.data();
     char_t* const last = current + data.size();
 
@@ -422,14 +429,14 @@ private:
   }
 
   std::deque<line_t> table;
-
-  struct {
-    std::chrono::milliseconds read;
-    std::chrono::milliseconds parse;
-  } perf;
 };
+
+using line = basic_line<char>;
+using file = basic_file<char>;
+using wline = basic_line<wchar_t>;
+using wfile = basic_file<wchar_t>;
 
 }
 
-static_assert(not std::is_copy_constructible<log::file<>>::value, "");
-static_assert(not std::is_copy_assignable<log::file<>>::value, "");
+static_assert(not std::is_copy_constructible<log::basic_file<>>::value, "");
+static_assert(not std::is_copy_assignable<log::basic_file<>>::value, "");
