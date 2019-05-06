@@ -82,7 +82,7 @@ void process(
         request.setOpt(curlpp::options::Url(url));
         return log::file<CharT>(alias, request);
       });
-
+#if 0
       profile("filtering " + alias, [&](){
         for (const auto& pattern : rules.filters) {
           for (auto& line : file) {
@@ -100,7 +100,52 @@ void process(
           }
         }
       });
+#else
+      const size_t line_per_thread = 20000;
+      const size_t tot = file.size();
+      const size_t workers = tot / line_per_thread;
+      const size_t rest = tot % line_per_thread;
 
+      debug(alias << " is " << tot << " lines long");
+
+      std::vector<std::future<void>> futures;
+      futures.reserve(workers-1);
+
+      const auto worker = [&file, &rules, &alias](size_t start, size_t count){
+
+        debug("worker spawned for " << alias << " from " << start << " to " << start + count);
+
+        const auto first = std::next(file.begin(), start);
+        const auto last = std::next(first, count);
+
+        for (const auto& pattern : rules.filters) {
+          for (auto it = first; it != last; ++it) {
+            if (it->contains(pattern)) {
+              it->suppress();
+            }
+          }
+        }
+
+        for (const auto& pattern : rules.normalizers) {
+          for (auto it = first; it != last; ++it) {
+            it->remove(pattern);
+          }
+        }
+
+        debug("worker for " << alias << " done");
+      };
+
+      for(size_t i = 0; i < workers - 1; ++i) {
+        const size_t chunk = line_per_thread + ( i == workers - 1 ? rest : 0);
+        futures.emplace_back(std::async(worker, i * line_per_thread, line_per_thread));
+      }
+
+      worker((workers - 1) * line_per_thread, line_per_thread + rest);
+
+      for (auto& f : futures) {
+        f.wait();
+      }
+#endif
       return file;
     };
 
@@ -302,6 +347,9 @@ static inline void print_help(const char* self, std::ostream& os) {
   os << "  --stdin   - : read the configuration from the std. input stream" << std::endl;
 }
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
 int main(int argc, char** argv)
 {
   try {
@@ -360,6 +408,18 @@ int main(int argc, char** argv)
     }
 
     profile("all", [&](){
+
+      struct rlimit limits;
+      const int niceness = nice(0);
+      const int z = getrlimit(RLIMIT_NICE, &limits);
+      if (limits.rlim_cur != limits.rlim_max) {
+        limits.rlim_cur = limits.rlim_max;
+        const int y = setrlimit(RLIMIT_NICE, &limits);
+        const int x = nice(20-int(limits.rlim_max));
+        if (0 !=x) {
+          debug("could not change the niceness of this process :(");
+        }
+      }
 
       std::vector<std::future<void>> future;
       future.reserve(artifacts.size());
