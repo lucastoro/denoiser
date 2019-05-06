@@ -1,12 +1,11 @@
 cmake_minimum_required(VERSION 2.8)
-project(ArtifactDenoiser)
+project(artifact-denoiser)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_subdirectory(yaml-cpp)
 add_subdirectory(curlpp)
-add_subdirectory(gflags)
 add_subdirectory(googletest)
 
 file(GLOB headers src/*.hpp)
@@ -14,11 +13,9 @@ file(GLOB sources src/*.cpp)
 
 include_directories(yaml-cpp/include)
 include_directories(curlpp/include)
-include_directories(gflags/include)
 add_executable(${PROJECT_NAME} ${headers} ${sources} main.cpp)
 target_link_libraries(${PROJECT_NAME} yaml-cpp)
 target_link_libraries(${PROJECT_NAME} curlpp_static)
-target_link_libraries(${PROJECT_NAME} gflags)
 target_link_libraries(${PROJECT_NAME} pthread)
 
 include_directories(googletest/googletest/include)

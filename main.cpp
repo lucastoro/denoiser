@@ -2,24 +2,9 @@
 #include <unordered_set>
 #include <future>
 
-#include "gflags/gflags.h"
 #include "curlpp/Easy.hpp"
 #include "yaml-cpp/yaml.h"
 #include "log-reader.hpp"
-//#include "thread-pool.hpp"
-
-namespace gflags {
-
-class Context final {
-public:
-  inline Context(int argc, char** argv) {
-    gflags::ParseCommandLineFlags(&argc, &argv, true);
-  }
-  inline ~Context() {
-    gflags::ShutDownCommandLineFlags();
-  }
-};
-}
 
 template <typename CharT>
 struct denoiser {
@@ -258,11 +243,12 @@ std::vector<artifact<CharT>> decode(const YAML::Node& node) {
   const auto extract_patterns = [&node](const char* name) -> std::vector<log::pattern<CharT>> {
     std::vector<log::pattern<CharT>> list;
     for (const auto& entry : node[name]) {
-      const auto r = entry["r"];
-      if (not r.IsNull()) {
-        list.emplace_back(std::basic_regex<CharT>(convert<CharT>(r.as<std::string>())));
-      } else {
+      if (entry["r"]) {
+        list.emplace_back(std::basic_regex<CharT>(convert<CharT>(entry["r"].as<std::string>())));
+      } else if (entry["s"]) {
         list.emplace_back(convert<CharT>(entry["s"].as<std::string>()));
+      } else {
+        throw std::runtime_error("hmmmmm");
       }
     }
     return list;
@@ -279,64 +265,148 @@ std::vector<artifact<CharT>> decode(const YAML::Node& node) {
   return artifacts;
 }
 
-DEFINE_string(config, "config.yaml", "Configuration file");
-DEFINE_bool(verbose, false, "Verbose output");
-DEFINE_bool(debug, false, "Very verbose output");
+class arguments {
+public:
+  arguments(int argc, char** argv)
+    : argc(argc), argv(argv) {}
+  bool has_flag(const char* name) const {
+    for (int i = 1; i < argc; ++i) {
+      if (0 == strcmp(name, argv[i])) {
+        return true;
+      }
+    }
+    return false;
+  }
+  template <typename ...Args>
+  bool has_flag(const char* first, Args... more) const {
+    return has_flag(first) or has_flag(more...);
+  }
+  bool has_option(const char* name) const {
+    for (int i = 1; i < argc -1; ++i) {
+      if (0 == strcmp(name, argv[i])) {
+        return true;
+      }
+    }
+    return false;
+  }
+  template <typename ...Args>
+  bool has_option(const char* first, Args... more) const {
+    return has_option(first) or has_option(more...);
+  }
+  std::string_view get_option(const char* name) const {
+    for (int i = 1; i < argc; ++i) {
+      if (0 == strcmp(name, argv[i])) {
+        if (i != argc - 1) {
+          return argv[i + 1];
+        }
+      }
+    }
+    return {};
+  }
+  template <typename ...Args>
+  std::string_view get_option(const char* first, Args... more) const {
+    const auto opt = get_option(first);
+    return opt.size() ? opt : get_option(first, more...);
+  }
+
+  std::string_view back() const {
+    return argv[argc - 1];
+  }
+
+  std::string_view front() const {
+    return argv[1];
+  }
+
+private:
+  int argc;
+  char** argv;
+};
+
+static inline void print_help(const char* self, std::ostream& os) {
+  const auto ptr = strrchr(self, '/');
+  os << "Usage: " << (ptr ? ptr + 1 : self) << "[OPTIONS]" << std::endl;
+  os << "OPTIONS:" << std::endl;
+  os << "  --verbose -v: print information regarding the process to stderr" << std::endl;
+  os << "  --debug   -d: print even more information to stderr" << std::endl;
+  os << "  --config  -c: read the configuration from the given filename" << std::endl;
+  os << "  --stdin   - : read the configuration from the std. input stream" << std::endl;
+}
 
 int main(int argc, char** argv)
 {
   try {
 
+    const arguments args(argc, argv);
+
+    if (args.has_flag("--help", "-h")) {
+      print_help(argv[0], std::cout);
+      return 0;
+    }
+
+    const bool log_debug = args.has_flag("--debug", "-d");
+    const bool log_verbose = args.has_flag("--verbose", "-v");
+    const bool read_stdin = args.has_flag("--stdin") or args.back() == "-";
+    const auto config = args.get_option("--config", "-c");
+
+    if (log_verbose) {
+      set_log_level(LOG_INFO);
+    }
+
+    if (log_debug) {
+      set_log_level(LOG_DEBUG);
+    }
+
+    if (not read_stdin and config.empty()) {
+      error("Missing argument, --stdin or --config must be speficied");
+      print_help(argv[0], std::cerr);
+      return 1;
+    }
+
+    const auto artifacts = read_stdin
+      ? decode<wchar_t>(YAML::LoadFile(std::string(config)))
+      : decode<wchar_t>(YAML::Load(std::cin));
+
+    if (not artifacts.empty()) {
+      error("Empty configuration");
+      return 1;
+    }
+
+    if (log_debug) {
+      debug(artifacts.size() << " artifacts:");
+      for (const auto& artifact : artifacts) {
+        debug(" - " << artifact.alias << "(" << artifact.target << ")");
+        for (const auto& ref : artifact.reference) {
+          debug("   - " << ref);
+        }
+      }
+    }
+
     profile("all", [&](){
-      const gflags::Context gfc_(argc, argv);
 
-      if (FLAGS_verbose) {
-        set_log_level(LOG_INFO);
-      }
+      std::vector<std::future<void>> future;
+      future.reserve(artifacts.size());
 
-      if (FLAGS_debug) {
-        set_log_level(LOG_DEBUG);
-      }
+      const curlpp::Cleanup curlpp_;
 
-      const auto artifacts = decode<wchar_t>(YAML::LoadFile(FLAGS_config));
+      std::string current;
 
-      if (FLAGS_debug) {
-        debug(artifacts.size() << " artifacts:");
-        for (const auto& artifact : artifacts) {
-          debug(" - " << artifact.alias << "(" << artifact.target << ")");
-          for (const auto& ref : artifact.reference) {
-            debug("   - " << ref);
-          }
-        }
-      }
-
-      if (not artifacts.empty()) {
-
-        std::vector<std::future<void>> future;
-        future.reserve(artifacts.size());
-
-        const curlpp::Cleanup curlpp_;
-
-        std::string current;
-
-        for (const auto& artifact : artifacts) {
-          future.emplace_back( std::async([&artifact, &current](){
-            process(artifact, [&current](const auto& line){
-              if (current != line.source) {
-                if (!current.empty()) {
-                  std::cout << "--- end " << current << " ---" << std::endl;
-                }
-                current = line.source;
-                std::cout << "--- begin " << current << " ---" << std::endl;
+      for (const auto& artifact : artifacts) {
+        future.emplace_back( std::async([&artifact, &current](){
+          process(artifact, [&current](const auto& line){
+            if (current != line.source) {
+              if (!current.empty()) {
+                std::cout << "--- end " << current << " ---" << std::endl;
               }
-              std::wcout << line.number << " " << line.content << std::endl;
-            });
-          }));
-        }
+              current = line.source;
+              std::cout << "--- begin " << current << " ---" << std::endl;
+            }
+            std::wcout << line.number << " " << line.content << std::endl;
+          });
+        }));
+      }
 
-        if (!current.empty()) {
-          std::cout << "--- end " << current << " ---" << std::endl;
-        }
+      if (!current.empty()) {
+        std::cout << "--- end " << current << " ---" << std::endl;
       }
     });
 
