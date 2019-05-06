@@ -23,8 +23,6 @@
 
 extern size_t log_level;
 
-void set_log_level(size_t);
-
 using tid_t = pid_t;
 
 #define gettid() syscall(SYS_gettid)

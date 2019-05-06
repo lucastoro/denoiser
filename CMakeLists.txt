@@ -6,7 +6,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_subdirectory(yaml-cpp)
 add_subdirectory(curlpp)
-add_subdirectory(googletest)
 
 file(GLOB headers src/*.hpp)
 file(GLOB sources src/*.cpp)
@@ -15,9 +14,12 @@ include_directories(yaml-cpp/include)
 include_directories(curlpp/include)
 add_executable(${PROJECT_NAME} ${headers} ${sources} main.cpp)
 target_link_libraries(${PROJECT_NAME} yaml-cpp)
-target_link_libraries(${PROJECT_NAME} curlpp_static)
+target_link_libraries(${PROJECT_NAME} curlpp)
 target_link_libraries(${PROJECT_NAME} pthread)
 
+# tests
+
+add_subdirectory(googletest)
 include_directories(googletest/googletest/include)
 include_directories(googletest/googlemock/include)
 include_directories(src)

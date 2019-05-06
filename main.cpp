@@ -5,6 +5,10 @@
 #include "curlpp/Easy.hpp"
 #include "yaml-cpp/yaml.h"
 #include "log-reader.hpp"
+#include "profile.hpp"
+
+bool enable_profile;
+size_t log_level = LOG_DEFAULT;
 
 template <typename CharT>
 struct denoiser {
@@ -19,52 +23,6 @@ struct artifact {
   std::vector<std::string> reference;
   denoiser<CharT> rules;
 };
-
-template <typename CharT>
-struct Line {
-  Line(const std::basic_string_view<CharT>& c, size_t n, const std::string& s, size_t t)
-    : content(c), number(n), source(s), total(t) {}
-  std::basic_string_view<CharT> content;
-  size_t number;
-  const std::string& source;
-  size_t total;
-};
-
-template <typename R, typename T>
-static inline R profile(const std::string& name, const T& lambda) {
-
-  using namespace std::chrono;
-  using clock = steady_clock;
-
-  const auto a = clock::now();
-  R r = lambda();
-  const auto b = clock::now();
-
-  if (duration_cast<microseconds>(b - a).count() < 1000) {
-    debug(name << " done in " << duration_cast<microseconds>(b - a).count() << " us");
-    return r;
-  }
-
-  if (duration_cast<milliseconds>(b - a).count() < 1000) {
-    const auto ms = duration_cast<microseconds>(b - a).count() / 1000;
-    const auto us = duration_cast<microseconds>(b - a).count() % 1000;
-    debug(name << " done in " << ms << "." << us << " ms");
-    return r;
-  }
-
-  if (duration_cast<seconds>(b - a).count() < 60) {
-    const auto sec = duration_cast<milliseconds>(b - a).count() / 1000;
-    const auto ms = duration_cast<milliseconds>(b - a).count() % 1000;
-    debug(name << " done in " << sec << "." << ms << " sec");
-    return r;
-  }
-
-  const auto min = duration_cast<seconds>(b - a).count() / 60;
-  const auto sec = duration_cast<seconds>(b - a).count() % 60;
-
-  debug(name << " done in " << min << " min, " << sec << " sec");
-  return r;
-}
 
 template <typename T>
 static inline void profile(const std::string& name, const T& lambda) {
@@ -122,7 +80,7 @@ void process(
       auto file = profile<log::file<CharT>>("downloading " + alias, [&](){
         curlpp::Easy request;
         request.setOpt(curlpp::options::Url(url));
-        return log::file<CharT>(request);
+        return log::file<CharT>(alias, request);
       });
 
       profile("filtering " + alias, [&](){
@@ -178,7 +136,6 @@ void process(
       f_ref.wait();
     }
 
-    const size_t total = file.size();
     size_t current = 0;
 
     profile("calculating hashes for " + artifact.alias, [&](){
@@ -192,7 +149,7 @@ void process(
     for (const auto& line : file) {
       ++current;
       if (0 == bucket.count(line.hash())) {
-        lambda(Line<CharT>(line.str(), current, artifact.alias, total));
+        lambda(line);
       }
     }
 
@@ -306,7 +263,7 @@ public:
   template <typename ...Args>
   std::string_view get_option(const char* first, Args... more) const {
     const auto opt = get_option(first);
-    return opt.size() ? opt : get_option(first, more...);
+    return opt.size() ? opt : get_option(more...);
   }
 
   std::string_view back() const {
@@ -316,6 +273,19 @@ public:
   std::string_view front() const {
     return argv[1];
   }
+
+  class const_iterator {
+  public:
+      const_iterator(char** argv) : argv(argv) {}
+      void operator ++ () { ++argv; }
+      bool operator == (const const_iterator& other) const { return argv == other.argv; }
+      std::string_view operator * () const { return *argv; }
+  private:
+    char** argv;
+  };
+
+  const_iterator begin() const { return argv + 1; }
+  const_iterator end() const { return argv + argc; }
 
 private:
   int argc;
@@ -343,18 +313,20 @@ int main(int argc, char** argv)
       return 0;
     }
 
-    const bool log_debug = args.has_flag("--debug", "-d");
-    const bool log_verbose = args.has_flag("--verbose", "-v");
+    if (args.has_flag("--verbose", "-v")) {
+      log_level = LOG_INFO;
+    }
+
+    if (args.has_flag("--debug", "-d")) {
+      log_level = LOG_DEBUG;
+    }
+
+    if (args.has_flag("--profile", "-p")) {
+      enable_profile = true;
+    }
+
     const bool read_stdin = args.has_flag("--stdin") or args.back() == "-";
     const auto config = args.get_option("--config", "-c");
-
-    if (log_verbose) {
-      set_log_level(LOG_INFO);
-    }
-
-    if (log_debug) {
-      set_log_level(LOG_DEBUG);
-    }
 
     if (not read_stdin and config.empty()) {
       error("Missing argument, --stdin or --config must be speficied");
@@ -362,16 +334,22 @@ int main(int argc, char** argv)
       return 1;
     }
 
-    const auto artifacts = read_stdin
-      ? decode<wchar_t>(YAML::LoadFile(std::string(config)))
-      : decode<wchar_t>(YAML::Load(std::cin));
+    if (read_stdin and config.size()) {
+      error("Invalid arguments, cannot specify both --stdin and --config");
+      print_help(argv[0], std::cerr);
+      return 1;
+    }
 
-    if (not artifacts.empty()) {
+    const auto artifacts = read_stdin
+      ? decode<wchar_t>(YAML::Load(std::cin))
+      : decode<wchar_t>(YAML::LoadFile(std::string(config)));
+
+    if (artifacts.empty()) {
       error("Empty configuration");
       return 1;
     }
 
-    if (log_debug) {
+    if (LOG_DEBUG == log_level) {
       debug(artifacts.size() << " artifacts:");
       for (const auto& artifact : artifacts) {
         debug(" - " << artifact.alias << "(" << artifact.target << ")");
@@ -393,14 +371,14 @@ int main(int argc, char** argv)
       for (const auto& artifact : artifacts) {
         future.emplace_back( std::async([&artifact, &current](){
           process(artifact, [&current](const auto& line){
-            if (current != line.source) {
+            if (current != line.source().name()) {
               if (!current.empty()) {
                 std::cout << "--- end " << current << " ---" << std::endl;
               }
-              current = line.source;
+              current = line.source().name();
               std::cout << "--- begin " << current << " ---" << std::endl;
             }
-            std::wcout << line.number << " " << line.content << std::endl;
+            std::wcout << line.number() << " " << line.str() << std::endl;
           });
         }));
       }

@@ -37,6 +37,9 @@ struct pattern {
 };
 
 template <typename CharT>
+class file;
+
+template <typename CharT>
 class line {
 public:
 
@@ -48,12 +51,16 @@ public:
   using const_iterator = const_pointer;
 
   line() noexcept
-    : ptr_(nullptr), size_(0), hash_(0)
+    : ptr_(nullptr), size_(0), number_(0), hash_(0)
   {}
 
-  line(char_t* ptr, const char_t* optr, size_t size) noexcept
-    : ptr_(ptr), original_ptr_(optr), size_(size), hash_(0)
+  line(const file<char_t>* fil, size_t num, char_t* ptr, const char_t* optr, size_t size) noexcept
+    : ptr_(ptr), original_ptr_(optr), size_(size), file_(fil), number_(num), hash_(0)
   {}
+
+  size_t number() const {
+    return number_;
+  }
 
   size_t size() const noexcept {
     return size_;
@@ -131,6 +138,10 @@ public:
     return hash() != other.hash();
   }
 
+  const file<char_t>& source() const {
+      return *file_;
+  }
+
 private:
 
   const string_view mut() const noexcept {
@@ -156,6 +167,8 @@ private:
   char_t* ptr_;
   const char_t* original_ptr_;
   size_t size_;
+  const file<char_t>* file_;
+  size_t number_;
   mutable size_t hash_;
 };
 
@@ -168,12 +181,14 @@ public:
   using line_t = line<char_t>;
   using encoding_t = encoding::encoder<CharT>;
 
-  inline file(std::istream& stream) {
+  inline file(const std::string& alias, std::istream& stream)
+    : alias(alias) {
     read_stream(stream);
     build_table();
   }
 
-  inline file(const char* filename) {
+  inline file(const std::string& alias, const char* filename)
+    : alias(alias) {
     std::ifstream stream(filename, std::ios_base::in | std::ios_base::binary);
     if (stream.is_open()) {
       read_stream(stream);
@@ -181,7 +196,8 @@ public:
     }
   }
 
-  file(curlpp::Easy& request) {
+  file(const std::string& alias, curlpp::Easy& request)
+    : alias(alias) {
       download(request);
       build_table();
   }
@@ -192,9 +208,9 @@ public:
 
   const file<char_t>& operator = (file<char_t>&& other) {
       if (this != &other) {
+          alias = std::move(other.alias);
           data = std::move(other.data);
           table = std::move(other.table);
-          perf = std::move(other.perf);
       }
       return *this;
   }
@@ -233,13 +249,9 @@ public:
     return not table.empty();
   }
 
-  void profile() const {
-    const auto MB = data.size() / 1048576.0;
-    const auto sec = perf.read.count() / 1000.0;
-    info("read : " << perf.read.count() << " ms (" << MB/sec << " MB/sec)");
-    info("parse: " << perf.parse.count() << " ms");
+  const std::string& name() const {
+      return alias;
   }
-
 private:
 
   struct data_t {
@@ -394,7 +406,6 @@ private:
   }
 
   inline void download(curlpp::Easy& request) {
-    Benchmark bench(perf.read);
     dowloader(request, data).perform();
   }
 
@@ -433,19 +444,18 @@ private:
   };
 
   inline void read_stream(std::istream& stream) {
-    Benchmark bench(perf.read);
     loader(stream, data).perform();
   }
 
   inline void build_table() {
-
-    Benchmark bench(perf.parse);
     char_t* current = data.mut.data();
     char_t* const last = current + data.size();
 
     for (char_t* ptr = current; ptr < last; ++ptr) {
       if (current and is_endline(*ptr)) {
         table.emplace_back(
+          this,
+          table.size() + 1,
           current,
           data.to_imm(current),
           ptr - current
@@ -461,6 +471,8 @@ private:
 
     if (current) {
       table.emplace_back(
+        this,
+        table.size() + 1,
         current,
         data.to_imm(current),
         last - current
@@ -468,12 +480,8 @@ private:
     }
   }
 
+  std::string alias;
   std::deque<line_t> table;
-
-  struct {
-    std::chrono::milliseconds read;
-    std::chrono::milliseconds parse;
-  } perf;
 };
 
 }
