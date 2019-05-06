@@ -23,8 +23,8 @@ public:
 
 template <typename CharT>
 struct denoiser {
-  std::vector<std::basic_regex<CharT>> filters;
-  std::vector<std::basic_regex<CharT>> normalizers;
+  std::vector<log::pattern<CharT>> filters;
+  std::vector<log::pattern<CharT>> normalizers;
 };
 
 template <typename CharT>
@@ -216,6 +216,22 @@ void process(
 }
 
 template <typename CharT>
+typename std::enable_if<not std::is_same<char,CharT>::value, std::basic_string<CharT>>::type
+static inline convert(const std::string& str) {
+  std::basic_string<CharT> ret;
+  for (char c : str) {
+    ret.push_back(CharT(c));
+  }
+  return ret;
+}
+
+template <typename CharT>
+typename std::enable_if<std::is_same<char,CharT>::value, const std::string&>::type
+static inline convert(const std::string& str) {
+  return str;
+}
+
+template <typename CharT>
 artifact<CharT> decodeArtifact(const YAML::Node& node) {
 
   artifact<CharT> out;
@@ -225,72 +241,6 @@ artifact<CharT> decodeArtifact(const YAML::Node& node) {
 
   for (const auto& ref : node["reference"]) {
     out.reference.push_back(ref.as<std::string>());
-  }
-
-  {
-    static constexpr const wchar_t* filters[] = {
-      LR"(Seen branch in repository)",
-      LR"(Checking out Revision)",
-      LR"(> git checkout)",
-      LR"(Commit message:)",
-      LR"(Notified Stash for commit with id)",
-      LR"(docker exec --tty --user 0:0)",
-      LR"(No custom packages to build)",
-      LR"(INFO:)",
-      LR"(^Fetched)",
-      LR"(^\s*Active:)",
-      LR"(^\s*Main PID:)",
-      LR"(^\s*Tasks:)",
-      LR"(^\s*Memory:)",
-      LR"(^\s*CPU:)",
-      LR"(^\s*[├└]─\d+)",
-      LR"((ECDSA) to the list of known hosts)",
-      LR"(/\s+#{10,}$)",
-      LR"(You can use following commands to access the host)",
-      LR"(HISTCONTROL=ignorespace)",
-      LR"(cat >/tmp/sshKey<<EOF)",
-      LR"(-----BEGIN RSA PRIVATE KEY-----)",
-      LR"(\s+[\w+\/]{52,}$)",
-      LR"(-----END RSA PRIVATE KEY-----)",
-      LR"(EOF)",
-      LR"(chmod 600 /tmp/sshKey)",
-      LR"(ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -i/tmp/sshKey -lroot)",
-    };
-
-    static constexpr const wchar_t* normalizers[] = {
-      LR"([a-zA-Z]{3} \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} CET)",
-      LR"(\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})",
-      LR"([a-zA-Z]{3} [a-zA-Z]{3} \d{1,2} \d{2}:\d{2}:\d{2} \d{4})",
-      LR"([A-Z][a-z]{2} \d{2} \d{2}:\d{2}:\d{2})",
-      LR"(\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z\])",
-      LR"(\d{2}:\d{2}:\d{2})",
-      LR"((?:[A-F0-9]{2}:){5}[A-F0-9]{2})", // FA:16:3E:B8:82:61
-      LR"(JENKINS-\w+-\w+-\w+-\d+)",
-      LR"(http:\/\/jenkins\.brightcomputing\.com\/job\/[^\s]+)",
-      LR"([0-9a-f-]{32,128})",
-      LR"((?:\d{1,3}\.){3}\d{1,3}(?:\\/\d{1,2})?)",
-      LR"(Seen \d+ remote branches)",
-      LR"(build number \d+)",
-      LR"(ci-node\d{3})",
-      LR"(IMAGE:\s+[^:]+:\d+)",
-      LR"(hyper\d+)",
-      LR"(dev[-:]\d+)",
-      LR"(\[\d+(?:[,.][\d]+)? k?B\])",
-      LR"(Get:\d+)",
-      LR"(cmd\[\d+\])",
-      LR"([TaskInitializer::reinitialize], automatic: \d+)"
-    };
-
-    out.rules.filters.reserve(std::size(filters));
-    out.rules.normalizers.reserve(std::size(normalizers));
-
-    for (const wchar_t* pattern : filters) {
-      out.rules.filters.emplace_back(pattern, std::regex::optimize);
-    }
-
-    for (const wchar_t* pattern : normalizers) {
-      out.rules.normalizers.emplace_back(pattern, std::regex::optimize);
-    }
   }
 
   return out;
@@ -303,6 +253,27 @@ std::vector<artifact<CharT>> decode(const YAML::Node& node) {
 
   for (const auto& entry : node["artifacts"]) {
     artifacts.push_back(decodeArtifact<CharT>(entry));
+  }
+
+  const auto extract_patterns = [&node](const char* name) -> std::vector<log::pattern<CharT>> {
+    std::vector<log::pattern<CharT>> list;
+    for (const auto& entry : node[name]) {
+      const auto r = entry["r"];
+      if (not r.IsNull()) {
+        list.emplace_back(std::basic_regex<CharT>(convert<CharT>(r.as<std::string>())));
+      } else {
+        list.emplace_back(convert<CharT>(entry["s"].as<std::string>()));
+      }
+    }
+    return list;
+  };
+
+  const auto filters = extract_patterns("filters");
+  const auto normalizers = extract_patterns("normalizers");
+
+  for(auto& artifact : artifacts) {
+    artifact.rules.filters = filters;
+    artifact.rules.normalizers = normalizers;
   }
 
   return artifacts;

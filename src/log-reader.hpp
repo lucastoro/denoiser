@@ -18,6 +18,25 @@
 namespace log {
 
 template <typename CharT>
+struct pattern {
+  enum type_t { Regex, String };
+  type_t type;
+  std::basic_regex<CharT> regex;
+  std::basic_string<CharT> string;
+
+  explicit inline pattern(const std::basic_string<CharT>& str) noexcept(std::is_nothrow_copy_constructible<std::basic_string<CharT>>::value)
+    : type(String)
+    , regex()
+    , string(str) {
+  }
+  explicit inline pattern(const std::basic_regex<CharT>& rgx) noexcept(std::is_nothrow_copy_constructible<std::basic_regex<CharT>>::value)
+    : type(Regex)
+    , regex(rgx)
+    , string() {
+  }
+};
+
+template <typename CharT>
 class line {
 public:
 
@@ -49,8 +68,31 @@ public:
     hash_ = 0;
   }
 
+  bool contains(const std::basic_string<char_t>& string) const noexcept {
+    return std::basic_string<char_t>::npos != str().find(string);
+  }
+
   bool contains(const std::basic_regex<char_t>& regex) const noexcept {
     return std::regex_search(begin(), end(), regex);
+  }
+
+  bool contains(const pattern<char_t>& pattern) {
+    return (pattern.type == pattern.Regex)
+      ? contains(pattern.regex)
+      : contains(pattern.string);
+  }
+
+  bool remove(const std::basic_string<char_t>& string, char_t rep = 'x') noexcept {
+
+    const auto ix = str().find(string);
+
+    if (ix == std::basic_string<char_t>::npos) {
+      return false;
+    }
+
+    std::fill(std::next(begin(), ix), std::next(begin(), ix + string.size()), rep);
+
+    return true;
   }
 
   bool remove(const std::basic_regex<char_t>& regex, char_t rep = 'x') noexcept {
@@ -71,6 +113,11 @@ public:
     return true;
   }
 
+  bool remove(const pattern<char_t>& pattern, char_t rep = 'x') {
+    return (pattern.type == pattern.Regex)
+      ? remove(pattern.regex, rep)
+      : remove(pattern.string, rep);
+  }
 
   size_t hash() const noexcept {
     if (0 == hash_) {
