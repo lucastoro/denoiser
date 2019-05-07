@@ -58,6 +58,23 @@ public:
     : ptr_(ptr), original_ptr_(optr), size_(size), file_(fil), number_(num), hash_(0)
   {}
 
+  line(line&& other) : line() {
+    (*this) = std::move(other);
+  }
+
+  line& operator = (line&& other) {
+    if (this != &other) {
+      ptr_ = std::move(other.ptr_);
+      original_ptr_ = std::move(other.original_ptr_);
+      size_ = std::move(other.size_);
+      file_ = std::move(other.file_);
+      number_ = std::move(other.number_);
+      hash_ = std::move(other.hash_);
+    }
+
+    return *this;
+  }
+
   size_t number() const {
     return number_;
   }
@@ -134,8 +151,8 @@ public:
   }
 
   bool operator == ( const line<char_t>& other ) const noexcept {
-    // return other.str() == str();
-    return hash() != other.hash();
+    return other.str() == str();
+    //return hash() != other.hash();
   }
 
   const file<char_t>& source() const {
@@ -143,6 +160,9 @@ public:
   }
 
 private:
+
+  line(const line&) = delete;
+  line& operator = (const line&) = delete;
 
   const string_view mut() const noexcept {
     return ptr_ ? string_view(ptr_, size_) : string_view();
@@ -172,7 +192,10 @@ private:
   mutable size_t hash_;
 };
 
-template <typename CharT = wchar_t>
+static_assert(not std::is_copy_constructible<log::line<char>>::value, "");
+static_assert(not std::is_copy_assignable<log::line<char>>::value, "");
+
+template <typename CharT>
 class file final {
 public:
 
@@ -486,5 +509,5 @@ private:
 
 }
 
-static_assert(not std::is_copy_constructible<log::file<>>::value, "");
-static_assert(not std::is_copy_assignable<log::file<>>::value, "");
+static_assert(not std::is_copy_constructible<log::file<char>>::value, "");
+static_assert(not std::is_copy_assignable<log::file<char>>::value, "");

@@ -7,6 +7,8 @@
 #include "log-reader.hpp"
 #include "profile.hpp"
 
+//#define AGGRESSIVE_THREADING 20000 // nr of lines per thread
+
 bool enable_profile;
 size_t log_level = LOG_DEFAULT;
 
@@ -61,6 +63,89 @@ static inline void profile(const std::string& name, const T& lambda) {
 
 static std::mutex global_lock;
 
+template <typename CharT>
+log::file<CharT> prepare(
+    const std::string& url,
+    const std::string& alias,
+    const denoiser<CharT>& rules
+    ) {
+
+  auto file = profile<log::file<CharT>>("downloading " + alias, [&](){
+    curlpp::Easy request;
+    request.setOpt(curlpp::options::Url(url));
+    return log::file<CharT>(alias, request);
+  });
+
+#ifdef AGGRESSIVE_THREADING
+
+  profile("simplifying " + alias, [&](){
+    const size_t line_per_thread = AGGRESSIVE_THREADING;
+    const size_t tot = file.size();
+    const size_t workers = tot / line_per_thread;
+    const size_t rest = tot % line_per_thread;
+
+    debug(alias << " is " << tot << " lines long");
+
+    std::vector<std::future<void>> futures;
+    futures.reserve(workers-1);
+
+    const auto worker = [&file, &rules, &alias](size_t start, size_t count){
+
+      debug("worker spawned for " << alias << " from " << start << " to " << start + count);
+
+      const auto first = std::next(file.begin(), start);
+      const auto last = std::next(first, count);
+
+      for (const auto& pattern : rules.filters) {
+        for (auto it = first; it != last; ++it) {
+          if (it->contains(pattern)) {
+            it->suppress();
+          }
+        }
+      }
+
+      for (const auto& pattern : rules.normalizers) {
+        for (auto it = first; it != last; ++it) {
+          it->remove(pattern);
+        }
+      }
+
+      debug("worker for " << alias << " done");
+    };
+
+    for(size_t i = 0; i < workers - 1; ++i) {
+      const size_t chunk = line_per_thread + ( i == workers - 1 ? rest : 0);
+      futures.emplace_back(std::async(std::launch::async, worker, i * line_per_thread, line_per_thread));
+    }
+
+    worker((workers - 1) * line_per_thread, line_per_thread + rest);
+
+    for (auto& f : futures) {
+      f.wait();
+    }
+  });
+#else
+  profile("filtering " + alias, [&](){
+    for (const auto& pattern : rules.filters) {
+      for (auto& line : file) {
+        if (line.contains(pattern)) {
+          line.suppress();
+        }
+      }
+    }
+  });
+
+  profile("normalizing " + alias, [&](){
+    for (const auto& pattern : rules.normalizers) {
+      for (auto& line : file) {
+        line.remove(pattern);
+      }
+    }
+  });
+#endif
+  return file;
+};
+
 template <typename CharT, typename Lambda>
 void process(
     const artifact<CharT>& artifact,
@@ -71,85 +156,7 @@ void process(
     std::unordered_set<size_t> bucket;
     std::mutex mutex;
 
-    const auto prepare = [](
-        const std::string& url,
-        const std::string& alias,
-        const denoiser<CharT>& rules
-        ) -> log::file<CharT> {
-
-      auto file = profile<log::file<CharT>>("downloading " + alias, [&](){
-        curlpp::Easy request;
-        request.setOpt(curlpp::options::Url(url));
-        return log::file<CharT>(alias, request);
-      });
-#if 0
-      profile("filtering " + alias, [&](){
-        for (const auto& pattern : rules.filters) {
-          for (auto& line : file) {
-            if (line.contains(pattern)) {
-              line.suppress();
-            }
-          }
-        }
-      });
-
-      profile("normalizing " + alias, [&](){
-        for (const auto& pattern : rules.normalizers) {
-          for (auto& line : file) {
-            line.remove(pattern);
-          }
-        }
-      });
-#else
-      const size_t line_per_thread = 20000;
-      const size_t tot = file.size();
-      const size_t workers = tot / line_per_thread;
-      const size_t rest = tot % line_per_thread;
-
-      debug(alias << " is " << tot << " lines long");
-
-      std::vector<std::future<void>> futures;
-      futures.reserve(workers-1);
-
-      const auto worker = [&file, &rules, &alias](size_t start, size_t count){
-
-        debug("worker spawned for " << alias << " from " << start << " to " << start + count);
-
-        const auto first = std::next(file.begin(), start);
-        const auto last = std::next(first, count);
-
-        for (const auto& pattern : rules.filters) {
-          for (auto it = first; it != last; ++it) {
-            if (it->contains(pattern)) {
-              it->suppress();
-            }
-          }
-        }
-
-        for (const auto& pattern : rules.normalizers) {
-          for (auto it = first; it != last; ++it) {
-            it->remove(pattern);
-          }
-        }
-
-        debug("worker for " << alias << " done");
-      };
-
-      for(size_t i = 0; i < workers - 1; ++i) {
-        const size_t chunk = line_per_thread + ( i == workers - 1 ? rest : 0);
-        futures.emplace_back(std::async(worker, i * line_per_thread, line_per_thread));
-      }
-
-      worker((workers - 1) * line_per_thread, line_per_thread + rest);
-
-      for (auto& f : futures) {
-        f.wait();
-      }
-#endif
-      return file;
-    };
-
-    const auto do_process = [&bucket, &mutex, &prepare](
+    const auto do_process = [&bucket, &mutex](
         const std::string& url,
         const std::string& alias,
         const denoiser<CharT>& rules
@@ -172,7 +179,7 @@ void process(
     std::vector<std::future<void>> f_refs;
     f_refs.reserve(artifact.reference.size());
     for (const auto& ref : artifact.reference) {
-      f_refs.emplace_back(std::async(do_process, ref, artifact.alias, artifact.rules) );
+      f_refs.emplace_back(std::async(std::launch::async, do_process, ref, artifact.alias, artifact.rules) );
     }
 
     const auto file = prepare(artifact.target, artifact.alias, artifact.rules);
@@ -409,18 +416,6 @@ int main(int argc, char** argv)
 
     profile("all", [&](){
 
-      struct rlimit limits;
-      const int niceness = nice(0);
-      const int z = getrlimit(RLIMIT_NICE, &limits);
-      if (limits.rlim_cur != limits.rlim_max) {
-        limits.rlim_cur = limits.rlim_max;
-        const int y = setrlimit(RLIMIT_NICE, &limits);
-        const int x = nice(20-int(limits.rlim_max));
-        if (0 !=x) {
-          debug("could not change the niceness of this process :(");
-        }
-      }
-
       std::vector<std::future<void>> future;
       future.reserve(artifacts.size());
 
@@ -429,7 +424,7 @@ int main(int argc, char** argv)
       std::string current;
 
       for (const auto& artifact : artifacts) {
-        future.emplace_back( std::async([&artifact, &current](){
+        future.emplace_back(std::async(std::launch::async, [&artifact, &current](){
           process(artifact, [&current](const auto& line){
             if (current != line.source().name()) {
               if (!current.empty()) {
@@ -441,6 +436,10 @@ int main(int argc, char** argv)
             std::wcout << line.number() << " " << line.str() << std::endl;
           });
         }));
+      }
+
+      for (auto& f : future) {
+        f.wait();
       }
 
       if (!current.empty()) {
