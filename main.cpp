@@ -14,8 +14,8 @@ size_t log_level = LOG_DEFAULT;
 
 template <typename CharT>
 struct denoiser {
-  std::vector<log::pattern<CharT>> filters;
-  std::vector<log::pattern<CharT>> normalizers;
+  std::vector<log::basic_pattern<CharT>> filters;
+  std::vector<log::basic_pattern<CharT>> normalizers;
 };
 
 template <typename CharT>
@@ -26,61 +26,24 @@ struct artifact {
   denoiser<CharT> rules;
 };
 
-template <typename T>
-static inline void profile(const std::string& name, const T& lambda) {
-
-  using namespace std::chrono;
-  using clock = steady_clock;
-
-  const auto a = clock::now();
-  lambda();
-  const auto b = clock::now();
-
-  if (duration_cast<microseconds>(b - a).count() < 1000) {
-    debug(name << " done in " << duration_cast<microseconds>(b - a).count() << " us");
-    return;
-  }
-
-  if (duration_cast<milliseconds>(b - a).count() < 1000) {
-    const auto ms = duration_cast<microseconds>(b - a).count() / 1000;
-    const auto us = duration_cast<microseconds>(b - a).count() % 1000;
-    debug(name << " done in " << ms << "." << us << " ms");
-    return;
-  }
-
-  if (duration_cast<seconds>(b - a).count() < 60) {
-    const auto sec = duration_cast<milliseconds>(b - a).count() / 1000;
-    const auto ms = duration_cast<milliseconds>(b - a).count() % 1000;
-    debug(name << " done in " << sec << "." << ms << " sec");
-    return;
-  }
-
-  const auto min = duration_cast<seconds>(b - a).count() / 60;
-  const auto sec = duration_cast<seconds>(b - a).count() % 60;
-
-  debug(name << " done in " << min << " min, " << sec << " sec");
-}
-
 static std::mutex global_lock;
 
 template <typename CharT>
-log::file<CharT> prepare(
+log::basic_file<CharT> prepare(
     const std::string& url,
     const std::string& alias,
     const denoiser<CharT>& rules
     ) {
 
-  auto file = profile<log::file<CharT>>("downloading " + alias, [&](){
-    curlpp::Easy request;
-    request.setOpt(curlpp::options::Url(url));
-    return log::file<CharT>(alias, request);
+  auto file = profile<log::basic_file<CharT>>("downloading " + alias, [&](){
+    return log::basic_file<CharT>(url, alias);
   });
 
 #ifdef AGGRESSIVE_THREADING
 
   profile("simplifying " + alias, [&](){
-    const size_t line_per_thread = AGGRESSIVE_THREADING;
     const size_t tot = file.size();
+    const size_t line_per_thread = tot / (tot / AGGRESSIVE_THREADING);
     const size_t workers = tot / line_per_thread;
     const size_t rest = tot % line_per_thread;
 
@@ -91,7 +54,7 @@ log::file<CharT> prepare(
 
     const auto worker = [&file, &rules, &alias](size_t start, size_t count){
 
-      debug("worker spawned for " << alias << " from " << start << " to " << start + count);
+      log_debug("worker spawned for " << alias << " from " << start << " to " << start + count);
 
       const auto first = std::next(file.begin(), start);
       const auto last = std::next(first, count);
@@ -110,7 +73,7 @@ log::file<CharT> prepare(
         }
       }
 
-      debug("worker for " << alias << " done");
+      log_debug("worker for " << alias << " done");
     };
 
     for(size_t i = 0; i < workers - 1; ++i) {
@@ -128,9 +91,7 @@ log::file<CharT> prepare(
   profile("filtering " + alias, [&](){
     for (const auto& pattern : rules.filters) {
       for (auto& line : file) {
-        if (line.contains(pattern)) {
-          line.suppress();
-        }
+        line.suppress(pattern);
       }
     }
   });
@@ -196,7 +157,7 @@ void process(
       }
     });
 
-    global_lock.lock();
+    const std::lock_guard<std::mutex> lock(global_lock);
 
     for (const auto& line : file) {
       ++current;
@@ -204,8 +165,6 @@ void process(
         lambda(line);
       }
     }
-
-    global_lock.unlock();
   });
 }
 
@@ -249,8 +208,8 @@ std::vector<artifact<CharT>> decode(const YAML::Node& node) {
     artifacts.push_back(decodeArtifact<CharT>(entry));
   }
 
-  const auto extract_patterns = [&node](const char* name) -> std::vector<log::pattern<CharT>> {
-    std::vector<log::pattern<CharT>> list;
+  const auto extract_patterns = [&node](const char* name) -> std::vector<log::basic_pattern<CharT>> {
+    std::vector<log::basic_pattern<CharT>> list;
     for (const auto& entry : node[name]) {
       if (entry["r"]) {
         list.emplace_back(std::basic_regex<CharT>(convert<CharT>(entry["r"].as<std::string>())));
@@ -278,7 +237,7 @@ class arguments {
 public:
   arguments(int argc, char** argv)
     : argc(argc), argv(argv) {}
-  bool has_flag(const char* name) const {
+  bool flag(const char* name) const {
     for (int i = 1; i < argc; ++i) {
       if (0 == strcmp(name, argv[i])) {
         return true;
@@ -287,22 +246,10 @@ public:
     return false;
   }
   template <typename ...Args>
-  bool has_flag(const char* first, Args... more) const {
-    return has_flag(first) or has_flag(more...);
+  bool flag(const char* first, Args... more) const {
+    return flag(first) or flag(more...);
   }
-  bool has_option(const char* name) const {
-    for (int i = 1; i < argc -1; ++i) {
-      if (0 == strcmp(name, argv[i])) {
-        return true;
-      }
-    }
-    return false;
-  }
-  template <typename ...Args>
-  bool has_option(const char* first, Args... more) const {
-    return has_option(first) or has_option(more...);
-  }
-  std::string_view get_option(const char* name) const {
+  std::string_view get(const char* name) const {
     for (int i = 1; i < argc; ++i) {
       if (0 == strcmp(name, argv[i])) {
         if (i != argc - 1) {
@@ -313,9 +260,9 @@ public:
     return {};
   }
   template <typename ...Args>
-  std::string_view get_option(const char* first, Args... more) const {
-    const auto opt = get_option(first);
-    return opt.size() ? opt : get_option(more...);
+  std::string_view get(const char* first, Args... more) const {
+    const auto opt = get(first);
+    return opt.size() ? opt : get(more...);
   }
 
   std::string_view back() const {
@@ -348,14 +295,11 @@ static inline void print_help(const char* self, std::ostream& os) {
   const auto ptr = strrchr(self, '/');
   os << "Usage: " << (ptr ? ptr + 1 : self) << "[OPTIONS]" << std::endl;
   os << "OPTIONS:" << std::endl;
+  os << "  --config  -c: read the configuration from the given filename" << std::endl;
+  os << "  --stdin   - : read the configuration from the input stream" << std::endl;
   os << "  --verbose -v: print information regarding the process to stderr" << std::endl;
   os << "  --debug   -d: print even more information to stderr" << std::endl;
-  os << "  --config  -c: read the configuration from the given filename" << std::endl;
-  os << "  --stdin   - : read the configuration from the std. input stream" << std::endl;
 }
-
-#include <sys/time.h>
-#include <sys/resource.h>
 
 int main(int argc, char** argv)
 {
@@ -363,34 +307,34 @@ int main(int argc, char** argv)
 
     const arguments args(argc, argv);
 
-    if (args.has_flag("--help", "-h")) {
+    if (args.flag("--help", "-h")) {
       print_help(argv[0], std::cout);
       return 0;
     }
 
-    if (args.has_flag("--verbose", "-v")) {
-      log_level = LOG_INFO;
+    if (args.flag("--verbose", "-v")) {
+      log_level |= LOG_INFO;
     }
 
-    if (args.has_flag("--debug", "-d")) {
-      log_level = LOG_DEBUG;
+    if (args.flag("--debug", "-d")) {
+      log_level |= LOG_DEBUG;
     }
 
-    if (args.has_flag("--profile", "-p")) {
-      enable_profile = true;
+    if (args.flag("--profile", "-p")) {
+      log_level |= LOG_PROFILE;
     }
 
-    const bool read_stdin = args.has_flag("--stdin") or args.back() == "-";
-    const auto config = args.get_option("--config", "-c");
+    const bool read_stdin = args.flag("--stdin") or args.back() == "-";
+    const auto config = args.get("--config", "-c");
 
     if (not read_stdin and config.empty()) {
-      error("Missing argument, --stdin or --config must be speficied");
+      log_error("Missing argument, --stdin or --config must be speficied");
       print_help(argv[0], std::cerr);
       return 1;
     }
 
     if (read_stdin and config.size()) {
-      error("Invalid arguments, cannot specify both --stdin and --config");
+      log_error("Invalid arguments, cannot specify both --stdin and --config");
       print_help(argv[0], std::cerr);
       return 1;
     }
@@ -400,16 +344,16 @@ int main(int argc, char** argv)
       : decode<wchar_t>(YAML::LoadFile(std::string(config)));
 
     if (artifacts.empty()) {
-      error("Empty configuration");
+      log_error("Empty configuration");
       return 1;
     }
 
     if (LOG_DEBUG == log_level) {
-      debug(artifacts.size() << " artifacts:");
+      log_debug(artifacts.size() << " artifacts:");
       for (const auto& artifact : artifacts) {
-        debug(" - " << artifact.alias << "(" << artifact.target << ")");
+        log_debug(" - " << artifact.alias << "(" << artifact.target << ")");
         for (const auto& ref : artifact.reference) {
-          debug("   - " << ref);
+          log_debug("   - " << ref);
         }
       }
     }
@@ -448,7 +392,7 @@ int main(int argc, char** argv)
     });
 
   } catch (const std::exception& ex) {
-    std::cerr << ex.what() << std::endl;
+    std::cerr << "exception got: " << ex.what() << std::endl << std::flush;
   }
   return 0;
 }

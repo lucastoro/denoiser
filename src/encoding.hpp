@@ -22,7 +22,7 @@ public:
   istream_feeder(std::istream& is) : is(is) {}
   virtual ~istream_feeder() {}
   virtual int get() override { return is.get(); }
-  virtual void push(int) override { critical("this method does not exists!"); }
+  virtual void push(int) override { log_critical("this method does not exists!"); }
   virtual void putback(int x) override { is.putback(char(x)); }
 private:
   std::istream& is;
