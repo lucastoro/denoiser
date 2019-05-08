@@ -16,7 +16,7 @@
 #include "benchmark.hpp"
 #include "logging.hpp"
 
-#include "log-downloader.hpp"
+#include "log-fetcher.hpp"
 
 namespace log {
 
@@ -43,6 +43,8 @@ private:
 
 using pattern = basic_pattern<char>;
 using wpattern = basic_pattern<wchar_t>;
+
+#include <iterator>
 
 template <typename CharT, typename Owner>
 class basic_line {
@@ -178,7 +180,43 @@ private:
     return;
   }
 
+  class culo : public std::iterator<std::output_iterator_tag, char_t> {
+  public:
+    culo(char_t* ptr) : ptr(ptr) {}
+    char_t* operator ++ (int i) {
+      ptr += i;
+      return ptr;
+    }
+    void operator ++ () {
+      ptr++;
+    }
+    char_t& operator * () {
+      return *ptr;
+    }
+  private:
+    char_t* ptr;
+  };
+
   void remove(const std::basic_regex<char_t>& regex, char_t rep = 'x') noexcept {
+
+    if (nullptr == ptr_ or 0 == size_) {
+      return;
+    }
+
+    char_t null[] = {'x', 0};
+
+    std::regex_replace(
+      culo(ptr_),
+      begin(),
+      end(),
+      regex,
+      null
+    );
+
+    hash_ = 0;
+  }
+
+  void _remove(const std::basic_regex<char_t>& regex, char_t rep = 'x') noexcept {
 
     if (nullptr == ptr_ or 0 == size_) {
       return;
@@ -254,42 +292,15 @@ static_assert(not std::is_copy_constructible<log::basic_line<char, int>>::value,
 static_assert(not std::is_copy_assignable<log::basic_line<char, int>>::value, "");
 
 template <typename CharT>
-class basic_file final {
+class basic_file final : data_consumer<CharT> {
 public:
 
   using char_t = CharT;
   using line_t = basic_line<char_t, basic_file<CharT>>;
   using encoding_t = encoding::encoder<CharT>;
-  enum source_t { local, http };
   using string_view = std::basic_string_view<char_t>;
 
-  inline basic_file(std::istream& stream, const std::string& alias = {})
-    : alias(alias) {
-    read_stream(stream);
-    build_table();
-  }
-
-  inline basic_file(source_t source, const std::string& resource, const std::string& alias = {})
-    : alias(alias) {
-    switch (source) {
-      case local: {
-        std::ifstream stream(resource, std::ios_base::in | std::ios_base::binary);
-        if (stream.is_open()) {
-          read_stream(stream);
-          build_table();
-        }
-        break;
-      }
-      case http: {
-        curl(resource);
-        build_table();
-        break;
-      }
-    }
-  }
-
-  inline basic_file(const std::string& uri, const std::string& alias = {})
-    : basic_file(from(uri), remove_protocol(uri), alias) {
+  basic_file() {
   }
 
   basic_file(basic_file<char_t>&& other) {
@@ -343,6 +354,10 @@ public:
       return alias;
   }
 
+private:
+  enum source_t {local, http};
+public:
+
   static basic_file<char_t> download(const std::string& url, const std::string& alias = {}) {
     return basic_file<char_t>(http, url, alias);
   }
@@ -352,6 +367,74 @@ public:
   }
 
 private:
+
+  template <typename char_t>
+  struct data_t {
+    std::vector<char_t> mut, imm;
+    inline size_t size() const {
+      enforce(mut.size() == imm.size(), "male male");
+      return mut.size();
+    }
+    inline size_t capacity() const {
+      enforce(mut.capacity() == imm.capacity(), "male male");
+      return mut.capacity();
+    }
+    inline void reserve(size_t sz) {
+      mut.reserve(sz);
+      imm.reserve(sz);
+    }
+    inline void push_back(char_t c) {
+      mut.push_back(c);
+      imm.push_back(c);
+    }
+    inline void clear() {
+      mut.clear();
+      imm.clear();
+    }
+    inline const char_t* to_imm(const char_t* mptr) const {
+      return std::next(imm.data(), std::distance(mut.data(), mptr));
+    }
+  };
+
+  // data_consumer
+  virtual void size_hint(size_t size) override {
+    if (data.capacity() < size) {
+      data.reserve(size);
+    }
+  }
+
+  // data_consumer
+  virtual void on_data(char_t* ptr, size_t count) override {
+    for (size_t i = 0; i < count; ++i) {
+      data.push_back(ptr[i]);
+    }
+  }
+
+  inline basic_file(std::istream& stream, const std::string& alias = {})
+    : alias(alias) {
+    read_stream(stream);
+    build_table();
+  }
+
+  inline basic_file(source_t source, const std::string& resource, const std::string& alias = {})
+    : alias(alias) {
+    switch (source) {
+      case local: {
+        std::ifstream stream(resource, std::ios_base::in | std::ios_base::binary);
+        if (not stream.is_open()) {
+          throw std::runtime_error("file not found" + resource);
+        }
+        read_stream(stream);
+        build_table();
+        break;
+      }
+      case http: {
+        curl(resource);
+        build_table();
+        break;
+      }
+    }
+  }
 
   static source_t from(const std::string& uri) {
 
@@ -393,11 +476,11 @@ private:
   }
 
   inline void curl(const std::string url) {
-    dowloader<char_t>(url, data).perform();
+    downloader<char_t>(url, *this).perform();
   }
 
   inline void read_stream(std::istream& stream) {
-    loader<char_t>(stream, data).perform();
+    loader<char_t>(stream, *this).perform();
   }
 
   inline void build_table() {

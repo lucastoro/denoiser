@@ -9,7 +9,6 @@
 
 //#define AGGRESSIVE_THREADING 20000 // nr of lines per thread
 
-bool enable_profile;
 size_t log_level = LOG_DEFAULT;
 
 template <typename CharT>
@@ -36,7 +35,7 @@ log::basic_file<CharT> prepare(
     ) {
 
   auto file = profile<log::basic_file<CharT>>("downloading " + alias, [&](){
-    return log::basic_file<CharT>(url, alias);
+    return log::basic_file<CharT>::download(url, alias);
   });
 
 #ifdef AGGRESSIVE_THREADING
