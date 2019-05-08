@@ -14,7 +14,7 @@ public:
 };
 
 TEST_F(ArtifactDenoiserTest, local) {
-  const auto x = log::basic_file<wchar_t>("", "test/utf8.txt");
+  const auto x = log::wfile::load("test/utf8.txt");
   ASSERT_EQ(x.size(), 3);
   ASSERT_EQ(x.at(0).str().at(0), 'A');
   ASSERT_EQ(x.at(1).str().at(0), 0x00A9);
@@ -22,18 +22,18 @@ TEST_F(ArtifactDenoiserTest, local) {
 }
 
 TEST_F(ArtifactDenoiserTest, http) {
-  const auto x = log::basic_file<wchar_t>("", "http://www.example.com");
+  const auto x = log::wfile::download("http://www.example.com");
   ASSERT_EQ(x.size(), 48);
 }
 
 TEST_F(ArtifactDenoiserTest, https) {
-  const auto x = log::basic_file<wchar_t>({}, "https://www.example.com");
+  const auto x = log::wfile::download("https://www.example.com");
   ASSERT_EQ(x.size(), 48);
 }
 
 TEST_F(ArtifactDenoiserTest, large) {
   const auto url = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/drivers/gpu/drm/amd/include/asic_reg/nbio/nbio_6_1_sh_mask.h";
-  const auto x = log::basic_file<wchar_t>({}, url);
+  const auto x = log::wfile::download(url);
   ASSERT_EQ(x.size(), 133634);
 }
 
