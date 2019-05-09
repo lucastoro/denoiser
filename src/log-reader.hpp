@@ -101,10 +101,10 @@ public:
       : suppress(pattern.string());
   }
 
-  void remove(const basic_pattern<char_t>& pattern, char_t rep = 'x') {
+  void remove(const basic_pattern<char_t>& pattern) {
     pattern.is_regex()
-      ? remove(pattern.regex(), rep)
-      : remove(pattern.string(), rep);
+      ? remove(pattern.regex())
+      : remove(pattern.string());
   }
 
   size_t hash() const noexcept {
@@ -129,25 +129,6 @@ public:
 
 private:
 
-  void hide(iterator first, iterator last, char_t rep) {
-#if 0
-    std::fill(first, last, rep);
-#else
-
-    const auto end = std::next(ptr_, size_);
-    const auto dist = std::distance(first, last);
-
-    if (size_ > dist) {
-      std::copy(last, end, first);
-    }
-
-    size_ -= dist;
-
-    trim();
-
-#endif
-  }
-
   void trim() {
 
     while (size_ && std::isspace(*ptr_)) {
@@ -158,104 +139,79 @@ private:
     }
   }
 
-  void remove(const std::basic_string<char_t>& string, char_t rep = 'x') noexcept {
+  void remove(const std::basic_string<char_t>& string) noexcept {
 
-    if (nullptr == ptr_ or 0 == size_) {
-      return;
+    const auto sz = string.size();
+    auto it = std::search(begin(), end(), string.begin(), string.end());
+
+    while (it != end()) {
+      std::copy(it + sz, end(), it); // this MUST be a forward copy
+      size_ -= sz;
+      it = std::search(it, end(), string.begin(), string.end());
     }
-
-    const auto idx = str().find(string);
-
-    if (idx == std::basic_string<char_t>::npos) {
-      return;
-    }
-
-    hide(
-      std::next(begin(), idx),
-      std::next(begin(), idx + string.size()),
-      rep
-    );
-
-    hash_ = 0;
-    return;
   }
 
-  class culo : public std::iterator<std::output_iterator_tag, char_t> {
+  class overwriter : public std::iterator<std::output_iterator_tag, char_t> {
   public:
-    culo(char_t* ptr) : ptr(ptr) {}
-    char_t* operator ++ (int i) {
-      ptr += i;
-      return ptr;
+    inline explicit overwriter(char_t* p) : ptr(p), base(&ptr) {}
+    inline overwriter(const overwriter& o) : ptr(o.ptr), base(o.base) {
     }
-    void operator ++ () {
-      ptr++;
+    inline char_t* operator ++ (int i) {
+      (*base) += i;
+      return (*base);
     }
-    char_t& operator * () {
-      return *ptr;
+    inline void operator ++ () {
+      (*base)++;
+    }
+    inline char_t& operator * () {
+      return *(*base);
+    }
+    inline const char_t* get() const {
+      return *base;
     }
   private:
     char_t* ptr;
+    char_t** base;
   };
 
-  void remove(const std::basic_regex<char_t>& regex, char_t rep = 'x') noexcept {
+  void remove(const std::basic_regex<char_t>& regex) noexcept {
 
-    if (nullptr == ptr_ or 0 == size_) {
+    if (0 == size_) {
       return;
     }
 
-    char_t null[] = {'x', 0};
+    char_t null[] = {0};
+    overwriter it(ptr_);
 
-    std::regex_replace(
-      culo(ptr_),
-      begin(),
-      end(),
-      regex,
-      null
-    );
+    std::regex_replace(it, begin(), end(), regex, null);
 
-    hash_ = 0;
-  }
+    size_ = it.get() - ptr_;
 
-  void _remove(const std::basic_regex<char_t>& regex, char_t rep = 'x') noexcept {
+    trim();
 
-    if (nullptr == ptr_ or 0 == size_) {
-      return;
-    }
-
-    std::match_results<iterator> match;
-
-    if (not std::regex_search(begin(), end(), match, regex)) {
-      return;
-    }
-
-    for (auto& sub : match) {
-      if (sub.matched) {
-        hide(sub.first, sub.second, rep);
-      }
-    }
     hash_ = 0;
   }
 
   void suppress(const std::basic_string<char_t>& pattern) noexcept {
 
-    if (nullptr == ptr_ or 0 == size_) {
+    if (0 == size_) {
       return;
     }
 
     if (std::basic_string<char_t>::npos != str().find(pattern)) {
-      ptr_ = nullptr;
+      size_ = 0;
       hash_ = 0;
     }
   }
 
   void suppress(const std::basic_regex<char_t>& pattern) noexcept {
 
-    if (nullptr == ptr_ or 0 == size_) {
+    if (0 == size_) {
       return;
     }
 
     if (std::regex_search(begin(), end(), pattern)) {
-      ptr_ = nullptr;
+      size_ = 0;
       hash_ = 0;
     }
   }
@@ -264,19 +220,19 @@ private:
   basic_line& operator = (const basic_line&) = delete;
 
   const_iterator begin() const noexcept {
-    return ptr_ ? ptr_ : reinterpret_cast<const_pointer>(this);
+    return ptr_;
   }
 
   const_iterator end() const noexcept {
-    return ptr_ ? (ptr_ + size_) : reinterpret_cast<const_pointer>(this);
+    return ptr_ + size_;
   }
 
   iterator begin() noexcept {
-    return ptr_ ? ptr_ : reinterpret_cast<pointer>(this);
+    return ptr_;
   }
 
   iterator end() noexcept {
-    return ptr_ ? (ptr_ + size_) : reinterpret_cast<pointer>(this);
+    return ptr_ + size_;
   }
 
   char_t* ptr_;
