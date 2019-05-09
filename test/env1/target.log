@@ -1,0 +1,7 @@
+DEBUG 10:10:22 line 1 will be deleted
+INFO 10:10:22 line 2 will be deleted
+WARNING 10:10:22 line 3 will be deleted
+ERROR 10:10:22 line 4 will be shown
+ERROR 10:10:22 line 5 will be shown
+ERROR 10:10:22 line 6 will be deleted
+ERROR 10:10:22 line 7 will be deleted luca

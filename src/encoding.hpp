@@ -39,16 +39,9 @@ class istream_feeder : public feeder {
 public:
   istream_feeder(std::istream& is) : is(is) {}
   virtual ~istream_feeder() {}
-  virtual value_t get() override {
-    if (queue.size()) {
-      const value_t x = queue.front();
-      queue.pop();
-      return x;
-    }
-    return value_t(is.get());
-  }
-  virtual void push(value_t x) override { queue.push(x); }
-  virtual void putback(value_t x) override { is.putback(char(x)); }
+  virtual int get() override { return is.get(); }
+  virtual void push(int) override { log_critical("this method does not exists!"); }
+  virtual void putback(int x) override { is.putback(char(x)); }
 private:
   std::istream& is;
   std::queue<value_t> queue;

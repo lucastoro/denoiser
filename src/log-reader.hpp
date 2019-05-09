@@ -6,6 +6,7 @@
 #include <queue>
 #include <regex>
 #include <fstream>
+#include <variant>
 
 #include "curlpp/cURLpp.hpp"
 #include "curlpp/Easy.hpp"
@@ -14,9 +15,37 @@
 #include "encoding.hpp"
 #include "logging.hpp"
 
+#include "log-fetcher.hpp"
+
 namespace log {
 
 template <typename CharT>
+class basic_pattern {
+public:
+  using regex_t = std::basic_regex<CharT>;
+  using string_t = std::basic_string<CharT>;
+
+  explicit inline basic_pattern(const string_t& str) noexcept(std::is_nothrow_copy_constructible<string_t>::value)
+    : value(str) {
+  }
+  explicit inline basic_pattern(const regex_t& rgx) noexcept(std::is_nothrow_copy_constructible<regex_t>::value)
+    : value(rgx) {
+  }
+
+  bool is_string() const { return std::holds_alternative<string_t>(value); }
+  bool is_regex() const { return std::holds_alternative<regex_t>(value); }
+  const string_t& string() const {return std::get<string_t>(value); }
+  const regex_t& regex() const {return std::get<regex_t>(value); }
+private:
+  std::variant<regex_t, string_t> value;
+};
+
+using pattern = basic_pattern<char>;
+using wpattern = basic_pattern<wchar_t>;
+
+#include <iterator>
+
+template <typename CharT, typename Owner>
 class basic_line {
 public:
 
@@ -28,48 +57,54 @@ public:
   using const_iterator = const_pointer;
 
   basic_line() noexcept
-    : ptr_(nullptr), size_(0), hash_(0)
+    : ptr_(nullptr), size_(0), number_(0), hash_(0)
   {}
 
-  basic_line(char_t* ptr, const char_t* optr, size_t size) noexcept
-    : ptr_(ptr), original_ptr_(optr), size_(size), hash_(0)
+  basic_line(const Owner* fil, size_t num, char_t* ptr, const char_t* optr, size_t size) noexcept
+    : ptr_(ptr), original_ptr_(optr), size_(size), original_size_(size), file_(fil), number_(num), hash_(0)
   {}
+
+  basic_line(basic_line&& other) : basic_line() {
+    (*this) = std::move(other);
+  }
+
+  basic_line& operator = (basic_line&& other) {
+    if (this != &other) {
+      ptr_ = std::move(other.ptr_);
+      original_ptr_ = std::move(other.original_ptr_);
+      size_ = std::move(other.size_);
+      original_size_ = std::move(other.size_);
+      file_ = std::move(other.file_);
+      number_ = std::move(other.number_);
+      hash_ = std::move(other.hash_);
+    }
+
+    return *this;
+  }
+
+  size_t number() const {
+    return number_;
+  }
 
   size_t size() const noexcept {
     return size_;
   }
 
   string_view str() const noexcept {
-    return string_view(original_ptr_, size_);
+    return string_view(original_ptr_, original_size_);
   }
 
-  void suppress() noexcept {
-    ptr_ = nullptr;
-    hash_ = 0;
+  void suppress(const basic_pattern<char_t>& pattern) {
+    pattern.is_regex()
+      ? suppress(pattern.regex())
+      : suppress(pattern.string());
   }
 
-  bool contains(const std::basic_regex<char_t>& regex) const noexcept {
-    return std::regex_search(begin(), end(), regex);
+  void remove(const basic_pattern<char_t>& pattern) {
+    pattern.is_regex()
+      ? remove(pattern.regex())
+      : remove(pattern.string());
   }
-
-  bool remove(const std::basic_regex<char_t>& regex, char_t rep = 'x') noexcept {
-
-    std::match_results<iterator> match;
-
-    if (not std::regex_search(begin(), end(), match, regex)) {
-      return false;
-    }
-
-    for (auto& sub : match) {
-      if (sub.matched) {
-        std::fill(sub.first, sub.second, rep);
-      }
-    }
-
-    hash_ = 0;
-    return true;
-  }
-
 
   size_t hash() const noexcept {
     if (0 == hash_) {
@@ -78,80 +113,149 @@ public:
     return hash_;
   }
 
-  bool operator == ( const basic_line<char_t>& other ) const noexcept {
+  template <typename AnyOwner>
+  bool operator == ( const basic_line<char_t, AnyOwner>& other ) const noexcept {
     return hash() != other.hash();
   }
 
-private:
+  const Owner& source() const {
+      return *file_;
+  }
 
   const string_view mut() const noexcept {
     return ptr_ ? string_view(ptr_, size_) : string_view();
   }
 
+private:
+
+  void trim() {
+
+    while (size_ && std::isspace(*ptr_)) {
+      ++ptr_;
+    }
+    while (size_ && std::isspace(ptr_[size_ - 1])) {
+      --size_;
+    }
+  }
+
+  void remove(const std::basic_string<char_t>& string) noexcept {
+
+    const auto sz = string.size();
+    auto it = std::search(begin(), end(), string.begin(), string.end());
+
+    while (it != end()) {
+      std::copy(it + sz, end(), it); // this MUST be a forward copy
+      size_ -= sz;
+      it = std::search(it, end(), string.begin(), string.end());
+    }
+  }
+
+  class overwriter : public std::iterator<std::output_iterator_tag, char_t> {
+  public:
+    inline explicit overwriter(char_t* p) : ptr(p), base(&ptr) {}
+    inline overwriter(const overwriter& o) : ptr(o.ptr), base(o.base) {
+    }
+    inline char_t* operator ++ (int i) {
+      (*base) += i;
+      return (*base);
+    }
+    inline void operator ++ () {
+      (*base)++;
+    }
+    inline char_t& operator * () {
+      return *(*base);
+    }
+    inline const char_t* get() const {
+      return *base;
+    }
+  private:
+    char_t* ptr;
+    char_t** base;
+  };
+
+  void remove(const std::basic_regex<char_t>& regex) noexcept {
+
+    if (0 == size_) {
+      return;
+    }
+
+    char_t null[] = {0};
+    overwriter it(ptr_);
+
+    std::regex_replace(it, begin(), end(), regex, null);
+
+    size_ = it.get() - ptr_;
+
+    trim();
+
+    hash_ = 0;
+  }
+
+  void suppress(const std::basic_string<char_t>& pattern) noexcept {
+
+    if (0 == size_) {
+      return;
+    }
+
+    if (std::basic_string<char_t>::npos != str().find(pattern)) {
+      size_ = 0;
+      hash_ = 0;
+    }
+  }
+
+  void suppress(const std::basic_regex<char_t>& pattern) noexcept {
+
+    if (0 == size_) {
+      return;
+    }
+
+    if (std::regex_search(begin(), end(), pattern)) {
+      size_ = 0;
+      hash_ = 0;
+    }
+  }
+
+  basic_line(const basic_line&) = delete;
+  basic_line& operator = (const basic_line&) = delete;
+
   const_iterator begin() const noexcept {
-    return ptr_ ? ptr_ : reinterpret_cast<const_pointer>(this);
+    return ptr_;
   }
 
   const_iterator end() const noexcept {
-    return ptr_ ? (ptr_ + size_) : reinterpret_cast<const_pointer>(this);
+    return ptr_ + size_;
   }
 
   iterator begin() noexcept {
-    return ptr_ ? ptr_ : reinterpret_cast<pointer>(this);
+    return ptr_;
   }
 
   iterator end() noexcept {
-    return ptr_ ? (ptr_ + size_) : reinterpret_cast<pointer>(this);
+    return ptr_ + size_;
   }
 
   char_t* ptr_;
   const char_t* original_ptr_;
   size_t size_;
+  size_t original_size_;
+  const Owner* file_;
+  size_t number_;
   mutable size_t hash_;
 };
 
-template <typename CharT = wchar_t>
-class basic_file final {
+static_assert(not std::is_copy_constructible<log::basic_line<char, int>>::value, "");
+static_assert(not std::is_copy_assignable<log::basic_line<char, int>>::value, "");
+
+template <typename CharT>
+class basic_file final : data_consumer<CharT> {
 public:
 
   using char_t = CharT;
+  using line_t = basic_line<char_t, basic_file<CharT>>;
+  using encoding_t = encoding::basic_encoder<CharT>;
   using string_view = std::basic_string_view<char_t>;
-  using line_t = basic_line<char_t>;
-  using encoding_t = encoding::basic_encoder<char_t>;
 
-  class exception : std::runtime_error {
-  public:
-    template <typename ...Args>
-    inline exception(Args... args) noexcept
-      : std::runtime_error(args...) {}
-  };
-
-  class not_found : public exception {
-  public:
-    template <typename ...Args>
-    inline not_found(Args... args) noexcept
-      : exception(args...) {}
-  };
-
-  class encoding_error : public exception {
-  public:
-    template <typename ...Args>
-    inline encoding_error(Args... args) noexcept
-      : exception(args...) {}
-  };
-
-  inline basic_file(const char* filename, encoding_t decoder = encoding::UTF8) noexcept(false) {
-    std::ifstream stream(filename, std::ios_base::in | std::ios_base::binary);
-    if (not stream.is_open()) {
-      throw not_found(filename);
-    }
-    read_stream(stream, decoder);
-    build_table();
-  }
-
-  basic_file(curlpp::Easy& request, encoding_t decoder = nullptr) noexcept(false) {
-      download(request, decoder);
-      build_table();
+  basic_file() {
   }
 
   basic_file(basic_file<char_t>&& other) {
@@ -160,6 +264,7 @@ public:
 
   const basic_file<char_t>& operator = (basic_file<char_t>&& other) {
       if (this != &other) {
+          alias = std::move(other.alias);
           data = std::move(other.data);
           table = std::move(other.table);
       }
@@ -200,8 +305,25 @@ public:
     return not table.empty();
   }
 
+  const std::string& name() const {
+      return alias;
+  }
+
+private:
+  enum source_t {local, http};
+public:
+
+  static basic_file<char_t> download(const std::string& url, const std::string& alias = {}) {
+    return basic_file<char_t>(http, url, alias);
+  }
+
+  static basic_file<char_t> load(const std::string& url, const std::string& alias = {}) {
+    return basic_file<char_t>(local, url, alias);
+  }
+
 private:
 
+  template <typename char_t>
   struct data_t {
     std::vector<char_t> mut, imm;
     inline size_t size() const {
@@ -227,121 +349,79 @@ private:
     inline const char_t* to_imm(const char_t* mptr) const {
       return std::next(imm.data(), std::distance(mut.data(), mptr));
     }
-  } data;
+  };
 
-  class dowloader {
-  public:
-    dowloader(curlpp::Easy& r, data_t& data, encoding_t decoder = nullptr)
-      : request(r), data(data), decode(decoder) {
-      request.setOpt(curlpp::options::NoSignal(true));
-      request.setOpt(curlpp::options::Header(false));
-      request.setOpt(curlpp::options::NoProgress(false));
-      request.setOpt(curlpp::options::Timeout(5)); // sec
-      request.setOpt(curlpp::options::FailOnError(true));
-
-      request.setOpt(curlpp::options::HeaderFunction(
-      [this](char* data, size_t size, size_t count) -> size_t {
-        return this->on_header(
-          const_cast<const uint8_t*>(reinterpret_cast<uint8_t*>(data)), size * count
-        );
-      }));
-
-      request.setOpt(curlpp::options::ProgressFunction(
-      [this](double a, double b, double, double) -> int {
-        return this->on_progress(a, b);
-      }));
-
-      request.setOpt(curlpp::options::WriteFunction(
-        [this](char* data, size_t size, size_t count) -> size_t {
-          return this->on_data(
-            const_cast<const uint8_t*>(reinterpret_cast<uint8_t*>(data)), size * count
-          );
-        })
-      );
+  // data_consumer
+  virtual void size_hint(size_t size) override {
+    if (data.capacity() < size) {
+      data.reserve(size);
     }
+  }
 
-    void perform() {
-      try {
-        request.perform();
-      } catch (const curlpp::LibcurlRuntimeError& ex) {
-        if (CURLE_COULDNT_RESOLVE_HOST == ex.whatCode()
-         or CURLE_HTTP_RETURNED_ERROR == ex.whatCode()) {
-          throw not_found(ex.what());
+  // data_consumer
+  virtual void on_data(char_t* ptr, size_t count) override {
+    for (size_t i = 0; i < count; ++i) {
+      data.push_back(ptr[i]);
+    }
+  }
+
+  inline basic_file(std::istream& stream, const std::string& alias = {})
+    : alias(alias) {
+    read_stream(stream);
+    build_table();
+  }
+
+  inline basic_file(source_t source, const std::string& resource, const std::string& alias = {})
+    : alias(alias) {
+    switch (source) {
+      case local: {
+        std::ifstream stream(resource, std::ios_base::in | std::ios_base::binary);
+        if (not stream.is_open()) {
+          throw std::runtime_error("file not found" + resource);
         }
-        throw ex;
+        read_stream(stream);
+        build_table();
+        break;
+      }
+      case http: {
+        curl(resource);
+        build_table();
+        break;
       }
     }
+  }
 
-  private:
+  static source_t from(const std::string& uri) {
 
-    size_t on_data(const uint8_t* ptr, size_t size) {
-
-      if (nullptr == decode) {
-        decode = encoding::UTF8; // better safe than sorry
-      }
-
-      for (size_t s = 0; s < size; ++s) {
-        feeder.push(ptr[s]);
-        char_t c;
-        const auto result = decode(feeder, c);
-        switch (result) {
-          case encoding::ok:
-            data.push_back(c);
-            break;
-          case encoding::end:
-            break;
-          case encoding::error:
-            throw encoding_error(result.message());
-            break;
-          case encoding::incomplete:
-            break;
-        }
-
-      }
-      return size;
-    }
-
-    int on_progress(double tot, double) {
-      const auto x = size_t(tot);
-      if (x > data.capacity()) {
-        data.reserve(x);
-      }
-      return 0;
-    }
-
-    size_t on_header(const uint8_t* ptr, size_t size) {
-      static const std::regex ctype_rx(R"(^[Cc]ontent-[Tt]ype: (.+))", std::regex::optimize);
-      std::cmatch ctype;
-      std::string_view header(reinterpret_cast<const char*>(ptr), size);
-
-      if (std::regex_search(header.begin(), header.end(), ctype, ctype_rx) and 2 == ctype.size()) {
-        static const std::regex charset_rx(R"(charset=([^ ]+))", std::regex::optimize);
-        std::cmatch charset;
-        if (std::regex_search(ctype[1].first, ctype[1].second, charset, charset_rx) and 2 == charset.size()) {
-          const auto ch = std::string_view(charset[1].first, size_t(charset[1].length()));
-          decode = encoding::get<char_t>(ch);
-          if (not decode) {
-            warning("unknown content type: " << ch);
-          }
-        } else {
-          debug("Content-Type received, but missing encoding, defaulting to latin1");
-          decode = encoding::LATIN1;
-        }
-      }
-      return size;
-    }
-
-    static constexpr std::pair<const char*, encoding_t> encodings[] = {
-      {"utf-8", encoding::UTF8},
-      {"us-ascii", encoding::ASCII},
-      {"iso-8859-1", encoding::LATIN1},
+    static const std::pair<std::regex, source_t> protocols[] = {
+      std::make_pair(std::regex(R"(^https?:\/\/([\w\-\.\/\_\~]+))"), http),
+      std::make_pair(std::regex(R"(^file:\/\/([\w\-\.\/\_\~]+))"), local)
     };
 
-    curlpp::Easy& request;
-    data_t& data;
-    encoding::buffered_feeder feeder;
-    encoding_t decode;
-  };
+    for (const auto& pair : protocols) {
+      if (std::regex_search(uri, pair.first)) {
+        return pair.second;
+      }
+    }
+
+    log_warning("unknown protocol for '" << uri << "'");
+
+    return local;
+  }
+
+  static std::string remove_protocol(const std::string& uri) {
+
+    static const std::regex proto(R"(^(?:file|https?|):\/\/([\w\-\.\/\_\~]+))");
+
+    std::smatch match;
+    if (std::regex_search(uri, match, proto) and match.size() == 2) {
+      return match[1].str();
+    }
+
+    log_warning("no known protocol in '" << uri << "'");
+
+    return uri;
+  }
 
   basic_file(const basic_file<char_t>&) = delete;
   const basic_file<char_t>& operator = (const basic_file<char_t>&) = delete;
@@ -350,62 +430,23 @@ private:
     return (c == '\n' or c =='\r');
   }
 
-  inline void download(curlpp::Easy& request, encoding_t decoder = nullptr) {
-    dowloader(request, data, decoder).perform();
+  inline void curl(const std::string url) {
+    downloader<char_t>(url, *this).perform();
   }
 
-  class loader {
-  public:
-    loader(std::istream& stream, data_t& data, encoding_t decoder = encoding::UTF8)
-      : feeder(stream), stream(stream), data(data), decode(decoder)
-    {}
-    void perform() {
-      stream.seekg(0, std::ios_base::seekdir::_S_end);
-      const size_t size = stream.tellg();
-      stream.seekg(0);
-      data.clear();
-      data.reserve(size);
-      bool stop = false;
-      while (not stop) {
-        char_t c;
-        const auto result = decode(feeder, c);
-        switch (result) {
-          case encoding::ok:
-            data.push_back(c);
-            break;
-          case encoding::end:
-            stop = true;
-            break;
-          case encoding::error:
-            throw encoding_error(result.message());
-            stop = true;
-            break;
-          case encoding::incomplete:
-            throw encoding_error("stram closed");
-            stop = true;
-            break;
-        }
-      }
-    }
-  private:
-    encoding::istream_feeder feeder;
-    std::istream& stream;
-    data_t& data;
-    encoding_t decode;
-  };
-
-  inline void read_stream(std::istream& stream, encoding_t encoder = encoding::UTF8) {
-    loader(stream, data, encoder).perform();
+  inline void read_stream(std::istream& stream) {
+    loader<char_t>(stream, *this).perform();
   }
 
   inline void build_table() {
-
     char_t* current = data.mut.data();
     char_t* const last = current + data.size();
 
     for (char_t* ptr = current; ptr < last; ++ptr) {
       if (current and is_endline(*ptr)) {
         table.emplace_back(
+          this,
+          table.size() + 1,
           current,
           data.to_imm(current),
           ptr - current
@@ -421,6 +462,8 @@ private:
 
     if (current) {
       table.emplace_back(
+        this,
+        table.size() + 1,
         current,
         data.to_imm(current),
         last - current
@@ -428,15 +471,15 @@ private:
     }
   }
 
+  std::string alias;
+  data_t<char_t> data;
   std::deque<line_t> table;
 };
 
-using line = basic_line<char>;
 using file = basic_file<char>;
-using wline = basic_line<wchar_t>;
 using wfile = basic_file<wchar_t>;
 
 }
 
-static_assert(not std::is_copy_constructible<log::basic_file<>>::value, "");
-static_assert(not std::is_copy_assignable<log::basic_file<>>::value, "");
+static_assert(not std::is_copy_constructible<log::basic_file<char>>::value);
+static_assert(not std::is_copy_assignable<log::basic_file<char>>::value);
