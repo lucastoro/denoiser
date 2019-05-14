@@ -2,14 +2,10 @@
 #include <unordered_set>
 #include <future>
 
-#include "curlpp/Easy.hpp"
 #include "yaml-cpp/yaml.h"
 #include "log-reader.hpp"
 #include "profile.hpp"
-
-//#define AGGRESSIVE_THREADING 20000 // nr of lines per thread
-
-size_t log_level = LOG_DEFAULT;
+#include "arguments.hpp"
 
 template <typename CharT>
 struct denoiser {
@@ -38,55 +34,6 @@ log::basic_file<CharT> prepare(
     return log::basic_file<CharT>::download(url, alias);
   });
 
-#ifdef AGGRESSIVE_THREADING
-
-  profile("simplifying " + alias, [&](){
-    const size_t tot = file.size();
-    const size_t line_per_thread = tot / (tot / AGGRESSIVE_THREADING);
-    const size_t workers = tot / line_per_thread;
-    const size_t rest = tot % line_per_thread;
-
-    debug(alias << " is " << tot << " lines long");
-
-    std::vector<std::future<void>> futures;
-    futures.reserve(workers-1);
-
-    const auto worker = [&file, &rules, &alias](size_t start, size_t count){
-
-      log_debug("worker spawned for " << alias << " from " << start << " to " << start + count);
-
-      const auto first = std::next(file.begin(), start);
-      const auto last = std::next(first, count);
-
-      for (const auto& pattern : rules.filters) {
-        for (auto it = first; it != last; ++it) {
-          if (it->contains(pattern)) {
-            it->suppress();
-          }
-        }
-      }
-
-      for (const auto& pattern : rules.normalizers) {
-        for (auto it = first; it != last; ++it) {
-          it->remove(pattern);
-        }
-      }
-
-      log_debug("worker for " << alias << " done");
-    };
-
-    for(size_t i = 0; i < workers - 1; ++i) {
-      const size_t chunk = line_per_thread + ( i == workers - 1 ? rest : 0);
-      futures.emplace_back(std::async(std::launch::async, worker, i * line_per_thread, line_per_thread));
-    }
-
-    worker((workers - 1) * line_per_thread, line_per_thread + rest);
-
-    for (auto& f : futures) {
-      f.wait();
-    }
-  });
-#else
   profile("filtering " + alias, [&](){
     for (const auto& pattern : rules.filters) {
       for (auto& line : file) {
@@ -102,7 +49,7 @@ log::basic_file<CharT> prepare(
       }
     }
   });
-#endif
+
   return file;
 };
 
@@ -232,64 +179,6 @@ std::vector<artifact<CharT>> decode(const YAML::Node& node) {
   return artifacts;
 }
 
-class arguments {
-public:
-  arguments(int argc, char** argv)
-    : argc(argc), argv(argv) {}
-  bool flag(const char* name) const {
-    for (int i = 1; i < argc; ++i) {
-      if (0 == strcmp(name, argv[i])) {
-        return true;
-      }
-    }
-    return false;
-  }
-  template <typename ...Args>
-  bool flag(const char* first, Args... more) const {
-    return flag(first) or flag(more...);
-  }
-  std::string_view get(const char* name) const {
-    for (int i = 1; i < argc; ++i) {
-      if (0 == strcmp(name, argv[i])) {
-        if (i != argc - 1) {
-          return argv[i + 1];
-        }
-      }
-    }
-    return {};
-  }
-  template <typename ...Args>
-  std::string_view get(const char* first, Args... more) const {
-    const auto opt = get(first);
-    return opt.size() ? opt : get(more...);
-  }
-
-  std::string_view back() const {
-    return argv[argc - 1];
-  }
-
-  std::string_view front() const {
-    return argv[1];
-  }
-
-  class const_iterator {
-  public:
-      const_iterator(char** argv) : argv(argv) {}
-      void operator ++ () { ++argv; }
-      bool operator == (const const_iterator& other) const { return argv == other.argv; }
-      std::string_view operator * () const { return *argv; }
-  private:
-    char** argv;
-  };
-
-  const_iterator begin() const { return argv + 1; }
-  const_iterator end() const { return argv + argc; }
-
-private:
-  int argc;
-  char** argv;
-};
-
 static inline void print_help(const char* self, std::ostream& os) {
   const auto ptr = strrchr(self, '/');
   os << "Usage: " << (ptr ? ptr + 1 : self) << "[OPTIONS]" << std::endl;
@@ -312,15 +201,15 @@ int main(int argc, char** argv)
     }
 
     if (args.flag("--verbose", "-v")) {
-      log_level |= LOG_INFO;
+      log_enable(LOG_INFO);
     }
 
     if (args.flag("--debug", "-d")) {
-      log_level |= LOG_DEBUG;
+      log_enable(LOG_DEBUG);
     }
 
     if (args.flag("--profile", "-p")) {
-      log_level |= LOG_PROFILE;
+      log_enable(LOG_PROFILE);
     }
 
     const bool read_stdin = args.flag("--stdin") or args.back() == "-";
@@ -347,7 +236,7 @@ int main(int argc, char** argv)
       return 1;
     }
 
-    if (LOG_DEBUG == log_level) {
+    if (log_has(LOG_DEBUG)) {
       log_debug(artifacts.size() << " artifacts:");
       for (const auto& artifact : artifacts) {
         log_debug(" - " << artifact.alias << "(" << artifact.target << ")");

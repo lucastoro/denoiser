@@ -2,49 +2,28 @@
 
 #include <iostream>
 #include <sstream>
-#include <cstddef>
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-#include <unistd.h>
-#include <string.h>
-#include <time.h>
-#include <sys/syscall.h>
-#include <sys/types.h>
-#include <sys/time.h>
-
-#define LOG_CRITICAL 0x1
-#define LOG_ERROR    0x2
-#define LOG_WARNING  0x4
-#define LOG_INFO     0x8
-#define LOG_PROFILE  0x10
-#define LOG_DEBUG    0x20
-#define LOG_DEFAULT  (LOG_CRITICAL|LOG_ERROR|LOG_WARNING)
-
-extern size_t log_level;
-
+using log_level_t = size_t;
 using tid_t = pid_t;
 
-#define gettid() syscall(SYS_gettid)
+#define LOG_CRITICAL log_level_t(0x1)
+#define LOG_ERROR    log_level_t(0x2)
+#define LOG_WARNING  log_level_t(0x4)
+#define LOG_INFO     log_level_t(0x8)
+#define LOG_PROFILE  log_level_t(0x10)
+#define LOG_DEBUG    log_level_t(0x20)
+#define LOG_DEFAULT  log_level_t(LOG_CRITICAL|LOG_ERROR|LOG_WARNING)
 
-static inline const char* gettime() {
-  thread_local char temp[128] = "";
-
-  struct timeval tv;
-  struct tm tm;
-  gettimeofday(&tv, nullptr);
-  localtime_r(&tv.tv_sec, &tm);
-
-  snprintf(temp, sizeof(temp), "%02d:%02d:%02d.%03ld", tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec / 1000);
-
-  return temp;
-}
+void log_enable(log_level_t lvl);
+void log_disable(log_level_t lvl);
+bool log_has(log_level_t lvl);
+const char* log_gettime();
+tid_t log_gettid();
 
 #define logging(file, PREFIX, lvl, ...) do { \
-  if(log_level & lvl) { \
+  if(log_has(lvl)) { \
     std::stringstream ss; \
-    ss << PREFIX " T" << gettid() << " " << gettime() << " | " << __VA_ARGS__ << std::endl; \
+    ss << PREFIX " T" << log_gettid() << " " << log_gettime() << " | " << __VA_ARGS__ << std::endl; \
     file << ss.str() << std::flush; \
   } \
 } while(false)
@@ -56,4 +35,4 @@ static inline const char* gettime() {
 #define log_profile(...) logging(std::cerr, "[PROF.]", LOG_PROFILE, __VA_ARGS__)
 #define log_debug(...)   logging(std::cerr, "[DEBUG]", LOG_DEBUG, __VA_ARGS__)
 
-#define enforce(x, ...) do { if (not (x)) log_critical( "assertion error: " #x ", " << __VA_ARGS__); } while(false)
+#define enforce(x, ...) do { if (not (x)) log_critical("assertion error: " #x ", " << __VA_ARGS__); } while(false)

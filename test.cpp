@@ -2,15 +2,16 @@
 //#include "gmock/gmock.h"
 
 #include "log-reader.hpp"
-
+#include "logging.hpp"
 #include <chrono>
 
 using namespace std::chrono_literals;
 
-size_t log_level = LOG_DEBUG;
-
 class ArtifactDenoiserTest : public testing::Test {
 public:
+  void SetUp() {
+
+  }
 };
 
 TEST_F(ArtifactDenoiserTest, local) {

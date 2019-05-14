@@ -43,7 +43,7 @@ static void profile_eval(const N& name, const std::chrono::duration<A,B>& dur) {
 template <typename R, typename T>
 static inline R profile(const std::string_view& name, const T& lambda) {
 
-  if (0 == (log_level & LOG_PROFILE)) {
+  if (not log_has(LOG_PROFILE)) {
       return lambda();
   }
 
@@ -56,7 +56,7 @@ static inline R profile(const std::string_view& name, const T& lambda) {
 template <typename T>
 static inline void profile(const std::string& name, const T& lambda) {
 
-  if (0 == (log_level & LOG_PROFILE)) {
+  if (not log_has(LOG_PROFILE)) {
       return lambda();
   }
 

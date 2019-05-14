@@ -43,8 +43,6 @@ private:
 using pattern = basic_pattern<char>;
 using wpattern = basic_pattern<wchar_t>;
 
-#include <iterator>
-
 template <typename CharT, typename Owner>
 class basic_line {
 public:
