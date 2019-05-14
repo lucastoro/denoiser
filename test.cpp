@@ -42,7 +42,7 @@ TEST_F(ArtifactDenoiserTest, large) {
 TEST_F(ArtifactDenoiserTest, line_remove_regex) {
   char local1[] = "test 1234 rofl";
   const char local2[] = "test 1234 rofl";
-  log::basic_line<char, int> line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
   log::pattern pattern(std::regex("\\d+"));
   line.remove(pattern);
   ASSERT_EQ(line.str(), local2);
@@ -52,7 +52,7 @@ TEST_F(ArtifactDenoiserTest, line_remove_regex) {
 TEST_F(ArtifactDenoiserTest, line_remove_regex_multi) {
   char local1[] = "test 1234 1234 rofl";
   const char local2[] = "test 1234 1234 rofl";
-  log::basic_line<char, int> line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
   log::pattern pattern(std::regex("\\d+"));
   line.remove(pattern);
   ASSERT_EQ(line.str(), local2);
@@ -62,7 +62,7 @@ TEST_F(ArtifactDenoiserTest, line_remove_regex_multi) {
 TEST_F(ArtifactDenoiserTest, line_remove_string) {
   char local1[] = "test 1234 rofl";
   const char local2[] = "test 1234 rofl";
-  log::basic_line<char, int> line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
   log::pattern pattern("1234");
   line.remove(pattern);
   ASSERT_EQ(line.str(), local2);
@@ -72,7 +72,7 @@ TEST_F(ArtifactDenoiserTest, line_remove_string) {
 TEST_F(ArtifactDenoiserTest, line_remove_string_multi) {
   char local1[] = "test 1234 1234 rofl";
   const char local2[] = "test 1234 1234 rofl";
-  log::basic_line<char, int> line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
   log::pattern pattern("1234");
   line.remove(pattern);
   ASSERT_EQ(line.str(), local2);
@@ -82,7 +82,7 @@ TEST_F(ArtifactDenoiserTest, line_remove_string_multi) {
 TEST_F(ArtifactDenoiserTest, line_suppress_regex) {
   char local1[] = "test 1234 rofl";
   const char local2[] = "test 1234 rofl";
-  log::basic_line<char, int> line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
   log::pattern pattern(std::regex("\\d+"));
   line.suppress(pattern);
   ASSERT_EQ(line.str(), local2);
@@ -92,7 +92,7 @@ TEST_F(ArtifactDenoiserTest, line_suppress_regex) {
 TEST_F(ArtifactDenoiserTest, line_suppress_string) {
   char local1[] = "test 1234 rofl";
   const char local2[] = "test 1234 rofl";
-  log::basic_line<char, int> line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
   log::pattern pattern("123");
   line.suppress(pattern);
   ASSERT_EQ(line.str(), local2);

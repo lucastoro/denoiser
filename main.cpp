@@ -8,7 +8,7 @@
 #include "arguments.hpp"
 
 template <typename CharT>
-struct denoiser {
+struct patterns {
   std::vector<log::basic_pattern<CharT>> filters;
   std::vector<log::basic_pattern<CharT>> normalizers;
 };
@@ -18,101 +18,141 @@ struct artifact {
   std::string alias;
   std::string target;
   std::vector<std::string> reference;
-  denoiser<CharT> rules;
+  patterns<CharT> rules;
 };
-
-static std::mutex global_lock;
 
 template <typename CharT>
-log::basic_file<CharT> prepare(
-    const std::string& url,
-    const std::string& alias,
-    const denoiser<CharT>& rules
-    ) {
+class denoiser {
+public:
+  denoiser(const std::vector<artifact<CharT>>& art) : artifacts(art) {}
 
-  auto file = profile<log::basic_file<CharT>>("downloading " + alias, [&](){
-    return log::basic_file<CharT>::download(url, alias);
-  });
+  /**
+   * Executes the denoising procedure on each artifact
+   * @param lambda the lambda that will be invoked for each line emitted
+   * @note the signature of the lambda is void lambda(const log::basic_line<CharT>& line)
+   * @note the lambda will be invoked in a thread-safe and serialized way in respect of the
+   *       line numbering but the order in which the files will be emitted will not necessarely be
+   *       the order in which they are listed in the artifact vector.
+   */
+  template <typename Lambda>
+  void run(const Lambda& lambda) {
 
-  profile("filtering " + alias, [&](){
-    for (const auto& pattern : rules.filters) {
-      for (auto& line : file) {
-        line.suppress(pattern);
+    profile("all", [&](){
+      std::vector<std::future<void>> future;
+      future.reserve(artifacts.size());
+
+      for (const auto& artifact : artifacts) {
+        future.emplace_back(std::async(std::launch::async, [this, &artifact, &lambda](){
+          process(artifact, lambda);
+        }));
       }
-    }
-  });
 
-  profile("normalizing " + alias, [&](){
-    for (const auto& pattern : rules.normalizers) {
-      for (auto& line : file) {
-        line.remove(pattern);
+      for (auto& f : future) {
+        f.wait();
       }
-    }
-  });
+    });
+  }
+private:
 
-  return file;
-};
+  /**
+   * Downloads the file and applies filters and normalizers
+   * @param url the remote url to download the file from
+   * @param alias an alias for the file
+   * @param rules there rules to apply to normalize the file
+   * @return the file ready for analysis
+   */
+  log::basic_file<CharT> prepare(const std::string& url, const std::string& alias, const patterns<CharT>& rules) {
 
-template <typename CharT, typename Lambda>
-void process(
-    const artifact<CharT>& artifact,
-    Lambda lambda) {
+    auto file = profile<log::basic_file<CharT>>("downloading " + url, [&](){
+      return log::basic_file<CharT>::download(url, alias);
+    });
 
-  profile("processing " + artifact.alias, [&](){
-
-    std::unordered_set<size_t> bucket;
-    std::mutex mutex;
-
-    const auto do_process = [&bucket, &mutex](
-        const std::string& url,
-        const std::string& alias,
-        const denoiser<CharT>& rules
-        ) -> void {
-
-      auto file = prepare(url, alias, rules);
-
-      profile("filling the bucket " + alias, [&](){
-        std::lock_guard<std::mutex> lock(mutex);
-        const auto bucket_size = (file.size() * 3) / 2;
-        if(bucket.size() < bucket_size) {
-          bucket.reserve(bucket_size);
-        }
+    profile("filtering " + alias, [&](){
+      for (const auto& pattern : rules.filters) {
         for (auto& line : file) {
-          bucket.insert(line.hash());
+          line.suppress(pattern);
         }
-      });
-    };
-
-    std::vector<std::future<void>> f_refs;
-    f_refs.reserve(artifact.reference.size());
-    for (const auto& ref : artifact.reference) {
-      f_refs.emplace_back(std::async(std::launch::async, do_process, ref, artifact.alias, artifact.rules) );
-    }
-
-    const auto file = prepare(artifact.target, artifact.alias, artifact.rules);
-
-    for (const auto& f_ref : f_refs) {
-      f_ref.wait();
-    }
-
-    size_t current = 0;
-
-    profile("calculating hashes for " + artifact.alias, [&](){
-      for (const auto& line : file) {
-        line.hash();
       }
     });
 
-    const std::lock_guard<std::mutex> lock(global_lock);
+    profile("normalizing " + alias, [&](){
+      for (const auto& pattern : rules.normalizers) {
+        for (auto& line : file) {
+          line.remove(pattern);
+        }
+      }
+    });
+
+    return file;
+  }
+
+  /**
+   * Use prepare() to download and normalize a log file, and then use it to fill a bucket with
+   * its hashes.
+   * @param url the remote url to download the file from
+   * @param alias an alias for the file
+   * @param rules there rules to apply to normalize the file
+  */
+  void fill_bucket(const std::string& url, const std::string& alias, const patterns<CharT>& rules) {
+
+    auto file = prepare(url, alias, rules);
+
+    std::lock_guard<std::mutex> lock(mutex);
+
+    const auto bucket_size = (file.size() * 3) / 2;
+
+    if(bucket.size() < bucket_size) {
+      bucket.reserve(bucket_size);
+    }
+
+    for (auto& line : file) {
+      bucket.insert(line.hash());
+    }
+  }
+
+  /**
+   * Execute the whole process of downloading and simplifying files, preparing the bucket
+   * and performing the final filtering.
+   * @param artifact the descriptor of the artifact to analyze
+   * @param lambda the lambda that will be invoked for each line emitted
+   * @note the signature of the lambda is void lambda(const log::basic_line<CharT>& line)
+  */
+  template <typename Lambda>
+  void process(const artifact<CharT>& artifact, const Lambda& lambda) {
+
+    std::vector<std::future<void>> future;
+    future.reserve(artifact.reference.size());
+
+    for (const auto& url : artifact.reference) {
+      future.emplace_back(std::async(std::launch::async, [this, &url, &artifact](){
+        fill_bucket(url, artifact.alias, artifact.rules);
+      }));
+    }
+
+    auto file = prepare(artifact.target, artifact.alias, artifact.rules);
 
     for (const auto& line : file) {
-      ++current;
+      line.hash();
+    }
+
+    for (auto& f : future) {
+      f.wait();
+    }
+
+    const std::lock_guard<std::mutex> lock(mutex);
+
+    for (const auto& line : file) {
       if (0 == bucket.count(line.hash())) {
         lambda(line);
       }
     }
-  });
-}
+  }
+
+  const std::vector<artifact<CharT>>& artifacts;
+  std::unordered_set<size_t> bucket;
+  std::mutex mutex;
+  curlpp::Cleanup curlpp_;
+};
 
 template <typename CharT>
 typename std::enable_if<not std::is_same<char,CharT>::value, std::basic_string<CharT>>::type
@@ -246,37 +286,17 @@ int main(int argc, char** argv)
       }
     }
 
-    profile("all", [&](){
+    std::string current = {};
 
-      std::vector<std::future<void>> future;
-      future.reserve(artifacts.size());
-
-      const curlpp::Cleanup curlpp_;
-
-      std::string current;
-
-      for (const auto& artifact : artifacts) {
-        future.emplace_back(std::async(std::launch::async, [&artifact, &current](){
-          process(artifact, [&current](const auto& line){
-            if (current != line.source().name()) {
-              if (!current.empty()) {
-                std::cout << "--- end " << current << " ---" << std::endl;
-              }
-              current = line.source().name();
-              std::cout << "--- begin " << current << " ---" << std::endl;
-            }
-            std::wcout << line.number() << " " << line.str() << std::endl;
-          });
-        }));
+    denoiser<wchar_t>(artifacts).run([&current](const log::wline& line){
+      if (current != line.source().name()) {
+        if (!current.empty()) {
+          std::cout << "--- end " << current << " ---" << std::endl;
+        }
+        current = line.source().name();
+        std::cout << "--- begin " << current << " ---" << std::endl;
       }
-
-      for (auto& f : future) {
-        f.wait();
-      }
-
-      if (!current.empty()) {
-        std::cout << "--- end " << current << " ---" << std::endl;
-      }
+      std::wcout << line.number() << " " << line.str() << std::endl;
     });
 
   } catch (const std::exception& ex) {

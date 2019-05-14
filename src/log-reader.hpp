@@ -40,10 +40,10 @@ private:
   std::variant<regex_t, string_t> value;
 };
 
-using pattern = basic_pattern<char>;
-using wpattern = basic_pattern<wchar_t>;
+template <typename CharT>
+class basic_file;
 
-template <typename CharT, typename Owner>
+template <typename CharT>
 class basic_line {
 public:
 
@@ -58,7 +58,7 @@ public:
     : ptr_(nullptr), size_(0), number_(0), hash_(0)
   {}
 
-  basic_line(const Owner* fil, size_t num, char_t* ptr, const char_t* optr, size_t size) noexcept
+  basic_line(const basic_file<CharT>* fil, size_t num, char_t* ptr, const char_t* optr, size_t size) noexcept
     : ptr_(ptr), original_ptr_(optr), size_(size), original_size_(size), file_(fil), number_(num), hash_(0)
   {}
 
@@ -111,12 +111,11 @@ public:
     return hash_;
   }
 
-  template <typename AnyOwner>
-  bool operator == ( const basic_line<char_t, AnyOwner>& other ) const noexcept {
+  bool operator == ( const basic_line<char_t>& other ) const noexcept {
     return hash() != other.hash();
   }
 
-  const Owner& source() const {
+  const basic_file<CharT>& source() const {
       return *file_;
   }
 
@@ -236,20 +235,20 @@ private:
   const char_t* original_ptr_;
   size_t size_;
   size_t original_size_;
-  const Owner* file_;
+  const basic_file<CharT>* file_;
   size_t number_;
   mutable size_t hash_;
 };
 
-static_assert(not std::is_copy_constructible<log::basic_line<char, int>>::value, "");
-static_assert(not std::is_copy_assignable<log::basic_line<char, int>>::value, "");
+static_assert(not std::is_copy_constructible<log::basic_line<char>>::value, "");
+static_assert(not std::is_copy_assignable<log::basic_line<char>>::value, "");
 
 template <typename CharT>
 class basic_file final : data_consumer<CharT> {
 public:
 
   using char_t = CharT;
-  using line_t = basic_line<char_t, basic_file<CharT>>;
+  using line_t = basic_line<char_t>;
   using encoding_t = encoding::basic_encoder<CharT>;
   using string_view = std::basic_string_view<char_t>;
 
@@ -473,6 +472,12 @@ private:
   data_t<char_t> data;
   std::deque<line_t> table;
 };
+
+using pattern = basic_pattern<char>;
+using wpattern = basic_pattern<wchar_t>;
+
+using line = basic_line<char>;
+using wline = basic_line<wchar_t>;
 
 using file = basic_file<char>;
 using wfile = basic_file<wchar_t>;
