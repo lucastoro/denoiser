@@ -6,9 +6,13 @@
 #include "denoiser.hpp"
 #include "config.hpp"
 
-static inline void print_help(const char* self, std::ostream& os) {
+static const char* my_name(const char* self) {
   const auto ptr = strrchr(self, '/');
-  os << "Usage: " << (ptr ? ptr + 1 : self) << "[OPTIONS]" << std::endl;
+  return ptr ? ptr + 1 : self;
+}
+
+static inline void print_help(const char* self, std::ostream& os) {
+  os << "Usage: " << my_name(self) << " [OPTIONS]" << std::endl;
   os << "OPTIONS:" << std::endl;
   os << "  --config  -c: read the configuration from the given filename" << std::endl;
   os << "  --stdin   - : read the configuration from the input stream" << std::endl;
