@@ -13,6 +13,7 @@ using tid_t = pid_t;
 #define LOG_PROFILE  log_level_t(0x10)
 #define LOG_DEBUG    log_level_t(0x20)
 #define LOG_DEFAULT  log_level_t(LOG_CRITICAL|LOG_ERROR|LOG_WARNING)
+#define LOG_ALL      log_level_t(0xFFFFFFFF)
 
 void log_enable(log_level_t lvl);
 void log_disable(log_level_t lvl);

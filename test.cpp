@@ -3,6 +3,8 @@
 
 #include "log-reader.hpp"
 #include "logging.hpp"
+#include "thread-pool.hpp"
+
 #include <chrono>
 
 using namespace std::chrono_literals;
@@ -10,7 +12,6 @@ using namespace std::chrono_literals;
 class ArtifactDenoiserTest : public testing::Test {
 public:
   void SetUp() {
-
   }
 };
 
@@ -37,6 +38,9 @@ TEST_F(ArtifactDenoiserTest, large) {
   const auto url = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/drivers/gpu/drm/amd/include/asic_reg/nbio/nbio_6_1_sh_mask.h";
   const auto x = log::wfile::download(url);
   ASSERT_EQ(x.size(), 133634);
+}
+
+TEST_F(ArtifactDenoiserTest, test1) {
 }
 
 TEST_F(ArtifactDenoiserTest, line_remove_regex) {
@@ -98,8 +102,6 @@ TEST_F(ArtifactDenoiserTest, line_suppress_string) {
   ASSERT_EQ(line.str(), local2);
   ASSERT_EQ(line.mut().size(), 0);
 }
-
-#include "thread-pool.hpp"
 
 TEST(ThreadPoolTest, single) {
   thread_pool pool(1);
