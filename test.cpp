@@ -4,7 +4,7 @@
 #include "log-reader.hpp"
 #include "logging.hpp"
 #include "thread-pool.hpp"
-
+#include "denoiser.hpp"
 #include <chrono>
 
 using namespace std::chrono_literals;
@@ -40,7 +40,22 @@ TEST_F(ArtifactDenoiserTest, large) {
   ASSERT_EQ(x.size(), 133634);
 }
 
+TEST_F(ArtifactDenoiserTest, load_config_missing) {
+  ASSERT_THROW(configuration<wchar_t>::load("nope.yaml"), std::runtime_error);
+}
+
+TEST_F(ArtifactDenoiserTest, load_config) {
+  const auto config = configuration<wchar_t>::load("test/test1.yaml");
+  ASSERT_EQ(config.size(), 5);
+  for (const auto& entry : config) {
+    ASSERT_EQ(entry.reference.size(), 3);
+  }
+}
+
 TEST_F(ArtifactDenoiserTest, test1) {
+  denoiser<wchar_t> denoiser(configuration<wchar_t>::load("test/test1.yaml"));
+  denoiser.run([](const log::wline&){
+  });
 }
 
 TEST_F(ArtifactDenoiserTest, line_remove_regex) {

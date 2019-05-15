@@ -38,7 +38,7 @@ public:
   template <typename ...Args>
   std::string_view value(const char* first, Args... more) const {
     const auto opt = value(first);
-    return opt.size() ? opt : get(more...);
+    return opt.size() ? opt : value(more...);
   }
 
   std::string_view back() const {
