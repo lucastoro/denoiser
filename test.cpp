@@ -6,13 +6,124 @@
 #include "thread-pool.hpp"
 #include "denoiser.hpp"
 #include <chrono>
+#include <unistd.h>
+#include <dirent.h>
+#include <sys/types.h>
 
 using namespace std::chrono_literals;
 
+class subdir {
+public:
+  subdir(const char* p) : path(p) {}
+  subdir(const std::string& p) : path(p) {}
+
+  class const_iterator {
+  public:
+    const_iterator(std::nullptr_t) : dir(nullptr), entry(nullptr), path(nullptr) {
+    }
+
+    const_iterator(const std::string& p) : dir(nullptr), entry(nullptr), path(&p) {
+
+      dir = opendir(p.c_str());
+
+      if(!dir) {
+        return;
+      }
+
+      ++(*this);
+    }
+    ~const_iterator() {
+      if (dir) {
+        closedir(dir);
+      }
+    }
+    std::string operator * () const {
+      if (!entry) return {};
+      return (path->back() == '/')
+        ? *path + entry->d_name
+        : *path + '/' + entry->d_name;
+    }
+    void operator ++ () {
+      if (!entry) return;
+      do {
+        entry = readdir(dir);
+      } while (
+        entry and (
+        std::string_view(entry->d_name) == "." or
+        std::string_view(entry->d_name) == ".." or
+        entry->d_type != DT_DIR)
+      );
+    }
+    bool operator == (const const_iterator& other) const {
+      return entry == other.entry;
+    }
+    bool operator != (const const_iterator& other) const {
+      return entry != other.entry;
+    }
+  private:
+    DIR* dir;
+    struct dirent* entry;
+    const std::string* path;
+  };
+
+  const_iterator begin() const { return const_iterator(path); }
+  const_iterator end() const { return const_iterator(nullptr); }
+
+private:
+  std::string path;
+};
+
+class pushd final {
+public:
+  pushd(const char* newpath) noexcept (false) : path(cwd()) {
+    if (0 != chdir(newpath)) {
+      throw std::runtime_error(strerror(errno));
+    }
+  }
+  pushd(const std::string& newpath) noexcept (false) : pushd(newpath.c_str()) {
+  }
+  ~pushd() noexcept (false) {
+    if (0 != chdir(path.c_str())) {
+      throw std::runtime_error(strerror(errno));
+    }
+  }
+  static std::string cwd() {
+    char* const ptr = get_current_dir_name();
+    const std::string result(ptr);
+    free(ptr);
+    return result;
+  }
+private:
+  std::string path;
+};
+
 class ArtifactDenoiserTest : public testing::Test {
 public:
-  void SetUp() {
+};
+
+class DataDrivenTest : public ::testing::Test {
+ public:
+  explicit DataDrivenTest(const std::string& p) : path(p) {
   }
+  void TestBody() override {
+    const pushd dir(path);
+    const auto config = configuration<wchar_t>::load("config.yaml");
+    denoiser<wchar_t> denoiser(config);
+    std::vector<std::wstring_view> result;
+    log::wfile expected = log::wfile::load("expect.log");
+    denoiser.run([&result](const log::wline& line){
+      result.push_back(line.str());
+    });
+
+    ASSERT_EQ(expected.size(), result.size());
+
+    auto it = result.begin();
+    for (const auto& line : expected) {
+      ASSERT_EQ(*it, line.str()); ++it;
+    }
+  }
+ private:
+  std::string path;
 };
 
 TEST_F(ArtifactDenoiserTest, local) {
@@ -50,12 +161,6 @@ TEST_F(ArtifactDenoiserTest, load_config) {
   for (const auto& entry : config) {
     ASSERT_EQ(entry.reference.size(), 3);
   }
-}
-
-TEST_F(ArtifactDenoiserTest, test1) {
-  denoiser<wchar_t> denoiser(configuration<wchar_t>::load("test/test1.yaml"));
-  denoiser.run([](const log::wline&){
-  });
 }
 
 TEST_F(ArtifactDenoiserTest, line_remove_regex) {
@@ -142,7 +247,20 @@ TEST(ThreadPoolTest, double) {
   ASSERT_EQ(x, 2);
 }
 
+void register_data_driven_tests() {
+  for (const auto& dir : subdir("test/ddt")) {
+    ::testing::RegisterTest(
+      "DataDrivenTest", dir.c_str(), nullptr,
+      dir.c_str(),
+      __FILE__, __LINE__,
+      // Important to use the fixture type as the return type here.
+      [=]() -> DataDrivenTest* { return new DataDrivenTest(dir); }
+    );
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
+  register_data_driven_tests();
   return RUN_ALL_TESTS();
 }

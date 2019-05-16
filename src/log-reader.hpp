@@ -318,6 +318,18 @@ public:
     return basic_file<char_t>(local, url, alias);
   }
 
+  static basic_file<char_t> fetch(const std::string& url, const std::string& alias = {}) {
+
+    switch (from(url)) {
+      case http:
+        return download(url, alias);
+      case local:
+        return load(remove_protocol(url), alias);
+    }
+
+    throw std::runtime_error("Unknown protocol");
+  }
+
 private:
 
   template <typename char_t>
@@ -374,7 +386,7 @@ private:
       case local: {
         std::ifstream stream(resource, std::ios_base::in | std::ios_base::binary);
         if (not stream.is_open()) {
-          throw std::runtime_error("file not found" + resource);
+          throw std::runtime_error("file not found: " + resource);
         }
         read_stream(stream);
         build_table();

@@ -82,7 +82,7 @@ private:
 
   void parse_content_length(const std::string_view& clength) {
     char temp[128];
-    if (not (sizeof(temp) < clength.size() - 1)) {
+    if (sizeof(temp) < clength.size() + 1) {
       log_warning("invalid Conten-Length field: '" << clength << "'");
       observer.size_hint(1024 * 1024);
     } else {
