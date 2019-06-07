@@ -189,7 +189,7 @@ private:
 
   void normalize(log::basic_file<CharT>& file, const patterns<CharT>& rules) { 
     for (auto& line : file) {
-      for (const auto& pattern : rules.filters) {
+      for (const auto& pattern : rules.normalizers) {
         line.remove(pattern);
       }
     }

@@ -29,7 +29,7 @@ int main(int argc, char** argv)
   const arguments args(argc, argv);
 #ifdef WITH_TESTS
   if (args.has_flag("--test", "-t")) {
-    return run_tests(argc, argv);
+    return test::run(argc, argv);
   }
 #endif
   if (args("--help", "-h")) {

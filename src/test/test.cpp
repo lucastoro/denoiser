@@ -126,6 +126,32 @@ private:
   std::string path;
 };
 
+template <typename C>
+class log_line {
+public:
+  explicit log_line(std::basic_ostream<C>& os) : os(os) {
+  }
+  template <typename T>
+  explicit log_line(std::basic_ostream<C>& os, const T& t) : os(os) {
+    os << t;
+  }
+  ~log_line() {
+    os << std::endl;
+  }
+  template <typename T>
+  log_line& operator << (const T& t) {
+    os << t;
+    return *this;
+  }
+private:
+  std::basic_ostream<C>& os;
+};
+
+#define info log_line<char>(std::cout, "[   INFO   ] ")
+#define warn log_line<char>(std::cerr, "[ WARNING  ] ")
+#define winfo log_line<wchar_t>(std::wcout, L"[   INFO   ] ")
+#define wwarn log_line<wchar_t>(std::wcerr, L"[ WARNING  ] ")
+
 class ArtifactDenoiserTest : public testing::Test {
 public:
 };
@@ -143,6 +169,17 @@ protected:
     denoiser.run([&result](const log::wline& line){
       result.push_back(line.str());
     });
+
+    if (expected.size() != result.size()) {
+      wwarn << "Expected:";
+      for (size_t i = 0; i < expected.size(); ++i) {
+        wwarn << "+" << i << " " << expected.at(i).str();
+      }
+      wwarn << "Result:";
+      for (size_t i = 0; i < result.size(); ++i) {
+        wwarn << "+" << i << " " << result.at(i);
+      }
+    }
 
     ASSERT_EQ(expected.size(), result.size());
 
@@ -276,13 +313,14 @@ TEST(ThreadPoolTest, double) {
   ASSERT_EQ(x, 2);
 }
 
-#define log  std::cout << "[   INFO   ] "
-#define warn std::cerr << "[ WARNING  ] "
-
 bool register_data_driven_tests() {
   size_t count = 0;
   for (auto entry : directory("test/ddt")) {
     if (entry.is_directory() and entry.contains("config.yaml")) {
+      if (!entry.contains("expect.log")) {
+        warn << "Directory " << entry.name() << " is missing the expect.log file";
+        continue;
+      }
       ++count;
       const auto name = entry.name();
       ::testing::RegisterTest(
@@ -293,18 +331,20 @@ bool register_data_driven_tests() {
         [name]() -> DataDrivenTest* { return new DataDrivenTest(name); }
       );
 
-      log << "Registered DDT " << name << std::endl;
+      info << "Registered DDT " << name;
     }
   }
   if (0 == count) {
-    warn << "No DDT found, please check the current directory" << std::endl;
+    warn << "No DDT found, please check the current directory";
   }
 
   return 0 != count;
 }
 
-int run_tests(int argc, char** argv) {
-  testing::InitGoogleTest(&argc, argv);
-  register_data_driven_tests();
-  return RUN_ALL_TESTS();
+namespace test {
+  int run(int argc, char** argv) {
+    testing::InitGoogleTest(&argc, argv);
+    register_data_driven_tests();
+    return RUN_ALL_TESTS();
+  }
 }

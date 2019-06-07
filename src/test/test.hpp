@@ -1,3 +1,5 @@
 #pragma once
 
-int run_tests(int argc, char** argv);
+namespace test {
+  int run(int argc, char** argv);
+}

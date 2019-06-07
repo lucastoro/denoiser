@@ -3,7 +3,7 @@ project(artifact-denoiser)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(TESTS ON)
+option(TESTS "Build the unit test suite" ON)
 
 add_subdirectory(yaml-cpp)
 add_subdirectory(curlpp)
