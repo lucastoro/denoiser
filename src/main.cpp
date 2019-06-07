@@ -5,6 +5,9 @@
 #include "arguments.hpp"
 #include "denoiser.hpp"
 #include "config.hpp"
+#ifdef WITH_TESTS
+#  include "test/test.hpp"
+#endif
 
 static const char* my_name(const char* self) {
   const auto ptr = strrchr(self, '/');
@@ -23,10 +26,12 @@ static inline void print_help(const char* self, std::ostream& os) {
 
 int main(int argc, char** argv)
 {
-  using char_t = wchar_t;
-
   const arguments args(argc, argv);
-
+#ifdef WITH_TESTS
+  if (args.has_flag("--test", "-t")) {
+    return run_tests(argc, argv);
+  }
+#endif
   if (args("--help", "-h")) {
     print_help(argv[0], std::cout);
     return 0;
@@ -61,6 +66,8 @@ int main(int argc, char** argv)
   }
 
   try {
+
+    using char_t = wchar_t;
 
     const auto config = read_stdin
       ? configuration<char_t>::read(std::cin)

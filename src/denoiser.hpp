@@ -8,7 +8,7 @@
 #include <unordered_set>
 #include <future>
 
-#define USE_THREAD_POOL 1
+#define USE_THREAD_POOL 0
 
 #if USE_THREAD_POOL
 #include "thread-pool.hpp"
@@ -147,18 +147,49 @@ private:
 
     return file;
   }
+#if USE_THREAD_POOL
+  template <typename Container, typename Lambda>
+  void loop(Container& container, const Lambda& lambda, size_t batch_size = 1000) {
+
+    const auto size = container.size();
+    const auto rest = size % batch_size;
+    const auto runs = size / batch_size + (rest ? 1 : 0);
+
+    std::vector<thread_pool::id_t> jobs;
+    jobs.reserve(runs);
+
+    for (size_t r = 0; r < runs; ++r) {
+      jobs.push_back(pool.submit([lambda, r, runs, batch_size, &container](){
+        auto it = std::next(std::begin(container), r * batch_size);
+        auto end = (r == runs - 1) ? std::end(container) : std::next(it, batch_size);
+        for(; it != end; ++it) {
+          lambda(*it);
+        }
+      }));
+    }
+
+    pool.wait(jobs);
+  }
+#else
+  template <typename Container, typename Lambda>
+  void loop(Container& container, Lambda&& lambda) {
+    for (auto& entry : container) {
+      lambda(entry);
+    }
+  }
+#endif
 
   void filter(log::basic_file<CharT>& file, const patterns<CharT>& rules) {
-    for (const auto& pattern : rules.filters) {
-      for (auto& line : file) {
+    for (auto& line : file) {
+      for (const auto& pattern : rules.filters) {
         line.suppress(pattern);
       }
     }
   }
 
-  void normalize(log::basic_file<CharT>& file, const patterns<CharT>& rules) {
-    for (const auto& pattern : rules.normalizers) {
-      for (auto& line : file) {
+  void normalize(log::basic_file<CharT>& file, const patterns<CharT>& rules) { 
+    for (auto& line : file) {
+      for (const auto& pattern : rules.filters) {
         line.remove(pattern);
       }
     }

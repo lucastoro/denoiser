@@ -138,12 +138,12 @@ private:
   void remove(const std::basic_string<char_t>& string) noexcept {
 
     const auto sz = string.size();
-    auto it = std::search(begin(), end(), string.begin(), string.end());
 
-    while (it != end()) {
+    for(auto it = std::search(begin(), end(), string.begin(), string.end());
+        it != end();
+        it = std::search(it, end(), string.begin(), string.end())) {
       std::copy(it + sz, end(), it); // this MUST be a forward copy
       size_ -= sz;
-      it = std::search(it, end(), string.begin(), string.end());
     }
   }
 

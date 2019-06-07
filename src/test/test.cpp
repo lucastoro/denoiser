@@ -12,17 +12,49 @@
 
 using namespace std::chrono_literals;
 
-class subdir {
+class directory {
 public:
-  subdir(const char* p) : path(p) {}
-  subdir(const std::string& p) : path(p) {}
+
+  class entry {
+  public:
+    entry() : path(nullptr), dirent(nullptr) {}
+    entry(const std::string* p, struct dirent* e) : path(p), dirent(e) {}
+    std::string name() const {
+      return nullptr == path
+        ? std::string()
+        : (path->back() == '/')
+          ? *path + dirent->d_name
+          : *path + '/' + dirent->d_name;
+    }
+    bool is_directory() const {
+      return DT_DIR == dirent->d_type;
+    }
+    bool is_file() const {
+      return DT_REG == dirent->d_type;
+    }
+    bool contains(const char* filename) const {
+      const auto p = name();
+      const auto full = p + ((p.back() != '/' and filename[0] != '/') ? "/" : "") + filename;
+      struct stat info;
+      if (0 != stat(full.c_str(), &info)) {
+        return false;
+      }
+      return true;
+    }
+  private:
+    const std::string* path;
+    struct dirent* dirent;
+  };
+
+  directory(const char* p) : path(p) {}
+  directory(const std::string& p) : path(p) {}
 
   class const_iterator {
   public:
-    const_iterator(std::nullptr_t) : dir(nullptr), entry(nullptr), path(nullptr) {
+    const_iterator(std::nullptr_t) : dir(nullptr), dirent(nullptr), path(nullptr) {
     }
 
-    const_iterator(const std::string& p) : dir(nullptr), entry(nullptr), path(&p) {
+    const_iterator(const std::string& p) : dir(nullptr), dirent(nullptr), path(&p) {
 
       dir = opendir(p.c_str());
 
@@ -37,32 +69,29 @@ public:
         closedir(dir);
       }
     }
-    std::string operator * () const {
-      if (!entry) return {};
-      return (path->back() == '/')
-        ? *path + entry->d_name
-        : *path + '/' + entry->d_name;
+    entry operator * () const {
+      return entry(path, dirent);
     }
     void operator ++ () {
-      if (!entry) return;
+      if (!dir) return;
       do {
-        entry = readdir(dir);
+        dirent = readdir(dir);
       } while (
-        entry and (
-        std::string_view(entry->d_name) == "." or
-        std::string_view(entry->d_name) == ".." or
-        entry->d_type != DT_DIR)
+        dirent and (
+        std::string_view(dirent->d_name) == "." or
+        std::string_view(dirent->d_name) == ".." or
+        dirent->d_type != DT_DIR)
       );
     }
     bool operator == (const const_iterator& other) const {
-      return entry == other.entry;
+      return dirent == other.dirent;
     }
     bool operator != (const const_iterator& other) const {
-      return entry != other.entry;
+      return dirent != other.dirent;
     }
   private:
     DIR* dir;
-    struct dirent* entry;
+    struct dirent* dirent;
     const std::string* path;
   };
 
@@ -101,10 +130,10 @@ class ArtifactDenoiserTest : public testing::Test {
 public:
 };
 
-class DataDrivenTest : public ::testing::Test {
- public:
-  explicit DataDrivenTest(const std::string& p) : path(p) {
-  }
+class DataDrivenTest : public ::testing::Test, public ::testing::WithParamInterface<const char*> {
+public:
+  DataDrivenTest(const std::string& path) : path(path) {}
+protected:
   void TestBody() override {
     const pushd dir(path);
     const auto config = configuration<wchar_t>::load("config.yaml");
@@ -122,7 +151,7 @@ class DataDrivenTest : public ::testing::Test {
       ASSERT_EQ(*it, line.str()); ++it;
     }
   }
- private:
+private:
   std::string path;
 };
 
@@ -247,19 +276,34 @@ TEST(ThreadPoolTest, double) {
   ASSERT_EQ(x, 2);
 }
 
-void register_data_driven_tests() {
-  for (const auto& dir : subdir("test/ddt")) {
-    ::testing::RegisterTest(
-      "DataDrivenTest", dir.c_str(), nullptr,
-      dir.c_str(),
-      __FILE__, __LINE__,
-      // Important to use the fixture type as the return type here.
-      [=]() -> DataDrivenTest* { return new DataDrivenTest(dir); }
-    );
+#define log  std::cout << "[   INFO   ] "
+#define warn std::cerr << "[ WARNING  ] "
+
+bool register_data_driven_tests() {
+  size_t count = 0;
+  for (auto entry : directory("test/ddt")) {
+    if (entry.is_directory() and entry.contains("config.yaml")) {
+      ++count;
+      const auto name = entry.name();
+      ::testing::RegisterTest(
+        "DataDrivenTest", name.c_str(), nullptr,
+        name.c_str(),
+        __FILE__, __LINE__,
+        // Important to use the fixture type as the return type here.
+        [name]() -> DataDrivenTest* { return new DataDrivenTest(name); }
+      );
+
+      log << "Registered DDT " << name << std::endl;
+    }
   }
+  if (0 == count) {
+    warn << "No DDT found, please check the current directory" << std::endl;
+  }
+
+  return 0 != count;
 }
 
-int main(int argc, char** argv) {
+int run_tests(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   register_data_driven_tests();
   return RUN_ALL_TESTS();
