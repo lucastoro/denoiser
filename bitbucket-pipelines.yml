@@ -1,0 +1,15 @@
+image: alpine:3.9
+options:
+  max-time: 5 # min
+pipelines:
+  default:
+    - step:
+        script:
+          - apk add --no-cache gcc g++ make cmake git curl-dev
+          - git submodule update --init
+          - mkdir build
+          - cd build
+          - cmake ..
+          - make -j $(grep processor /proc/cpuinfo | wc -l)
+          - cd ..
+          - ./build/artifact-denoiser --test
