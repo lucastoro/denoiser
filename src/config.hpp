@@ -25,8 +25,8 @@ static inline convert(const std::string& str) {
 
 template <typename CharT>
 struct patterns {
-  std::vector<log::basic_pattern<CharT>> filters;
-  std::vector<log::basic_pattern<CharT>> normalizers;
+  std::vector<artifact::basic_pattern<CharT>> filters;
+  std::vector<artifact::basic_pattern<CharT>> normalizers;
 };
 
 template <typename CharT>
@@ -65,8 +65,8 @@ private:
       artifacts.push_back(configuration<CharT>(entry));
     }
 
-    const auto extract_patterns = [&node](const char* name) -> std::vector<log::basic_pattern<CharT>> {
-      std::vector<log::basic_pattern<CharT>> list;
+    const auto extract_patterns = [&node](const char* name) -> std::vector<artifact::basic_pattern<CharT>> {
+      std::vector<artifact::basic_pattern<CharT>> list;
       for (const auto& entry : node[name]) {
         if (entry["r"]) {
           list.emplace_back(std::basic_regex<CharT>(convert<CharT>(entry["r"].as<std::string>())));

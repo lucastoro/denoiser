@@ -1,6 +1,6 @@
 #pragma once
 
-#include "log-reader.hpp"
+#include "artifact.hpp"
 #include "profile.hpp"
 #include "config.hpp"
 
@@ -22,7 +22,7 @@ public:
   /**
    * Executes the denoising procedure on each artifact
    * @param lambda the lambda that will be invoked for each line emitted
-   * @note the signature of the lambda is void lambda(const log::basic_line<CharT>& line)
+   * @note the signature of the lambda is void lambda(const artifact::basic_line<CharT>& line)
    * @note the lambda will be invoked in a thread-safe and serialized way in respect of the
    *       line numbering but the order in which the files will be emitted will not necessarely be
    *       the order in which they are listed in the artifact vector.
@@ -59,7 +59,7 @@ private:
    * and performing the final filtering.
    * @param artifact the descriptor of the artifact to analyze
    * @param lambda the lambda that will be invoked for each line emitted
-   * @note the signature of the lambda is void lambda(const log::basic_line<CharT>& line)
+   * @note the signature of the lambda is void lambda(const artifact::basic_line<CharT>& line)
   */
   template <typename Lambda>
   void process(const configuration<CharT>& artifact, const Lambda& lambda) {
@@ -125,12 +125,12 @@ private:
    * @param rules there rules to apply to normalize the file
    * @return the file ready for analysis
    */
-  log::basic_file<CharT> prepare(const std::string& url,
+  artifact::basic_file<CharT> prepare(const std::string& url,
                                  const std::string& alias,
                                  const patterns<CharT>& rules) {
 
-    auto file = profile<log::basic_file<CharT>>("fetching " + url, [&](){
-      return log::basic_file<CharT>::fetch(url, alias);
+    auto file = profile<artifact::basic_file<CharT>>("fetching " + url, [&](){
+      return artifact::basic_file<CharT>::fetch(url, alias);
     });
 
     profile("filtering " + alias, [&](){
@@ -179,7 +179,7 @@ private:
   }
 #endif
 
-  void filter(log::basic_file<CharT>& file, const patterns<CharT>& rules) {
+  void filter(artifact::basic_file<CharT>& file, const patterns<CharT>& rules) {
     for (auto& line : file) {
       for (const auto& pattern : rules.filters) {
         line.suppress(pattern);
@@ -187,7 +187,7 @@ private:
     }
   }
 
-  void normalize(log::basic_file<CharT>& file, const patterns<CharT>& rules) { 
+  void normalize(artifact::basic_file<CharT>& file, const patterns<CharT>& rules) {
     for (auto& line : file) {
       for (const auto& pattern : rules.normalizers) {
         line.remove(pattern);
@@ -195,9 +195,9 @@ private:
     }
   }
 
-  void compute_hashes(log::basic_file<CharT>& file) {
+  void compute_hashes(artifact::basic_file<CharT>& file) {
     for (const auto& line : file) {
-      line.hash(); // here I'm spoiling the hash caching of log::basic_line
+      line.hash(); // here I'm spoiling the hash caching of artifact::basic_line
     }
   }
 

@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "log-reader.hpp"
+#include "artifact.hpp"
 #include "profile.hpp"
 #include "arguments.hpp"
 #include "denoiser.hpp"
@@ -91,7 +91,7 @@ int main(int argc, char** argv)
     std::string current = {};
     denoiser<char_t> denoiser(config);
 
-    denoiser.run([&current](const log::wline& line){
+    denoiser.run([&current](const artifact::wline& line){
       if (current != line.source().name()) {
         if (!current.empty()) {
           std::cout << "--- end " << current << " ---" << std::endl;

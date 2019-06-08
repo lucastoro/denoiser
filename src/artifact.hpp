@@ -15,9 +15,9 @@
 #include "encoding.hpp"
 #include "logging.hpp"
 
-#include "log-fetcher.hpp"
+#include "artifact-fetcher.hpp"
 
-namespace log {
+namespace artifact {
 
 template <typename CharT>
 class basic_pattern {
@@ -240,8 +240,8 @@ private:
   mutable size_t hash_;
 };
 
-static_assert(not std::is_copy_constructible<log::basic_line<char>>::value, "");
-static_assert(not std::is_copy_assignable<log::basic_line<char>>::value, "");
+static_assert(not std::is_copy_constructible<artifact::basic_line<char>>::value, "");
+static_assert(not std::is_copy_assignable<artifact::basic_line<char>>::value, "");
 
 template <typename CharT>
 class basic_file final : data_consumer<CharT> {
@@ -496,5 +496,5 @@ using wfile = basic_file<wchar_t>;
 
 }
 
-static_assert(not std::is_copy_constructible<log::basic_file<char>>::value);
-static_assert(not std::is_copy_assignable<log::basic_file<char>>::value);
+static_assert(not std::is_copy_constructible<artifact::basic_file<char>>::value);
+static_assert(not std::is_copy_assignable<artifact::basic_file<char>>::value);

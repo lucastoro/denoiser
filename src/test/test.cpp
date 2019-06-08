@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
 //#include "gmock/gmock.h"
 
-#include "log-reader.hpp"
+#include "artifact.hpp"
 #include "logging.hpp"
 #include "thread-pool.hpp"
 #include "denoiser.hpp"
@@ -165,8 +165,8 @@ protected:
     const auto config = configuration<wchar_t>::load("config.yaml");
     denoiser<wchar_t> denoiser(config);
     std::vector<std::wstring_view> result;
-    log::wfile expected = log::wfile::load("expect.log");
-    denoiser.run([&result](const log::wline& line){
+    artifact::wfile expected = artifact::wfile::load("expect.log");
+    denoiser.run([&result](const artifact::wline& line){
       result.push_back(line.str());
     });
 
@@ -193,8 +193,8 @@ private:
 };
 
 TEST_F(ArtifactDenoiserTest, local) {
-  log::wfile x;
-  ASSERT_NO_THROW(x = log::wfile::load("test/utf8.txt"));
+  artifact::wfile x;
+  ASSERT_NO_THROW(x = artifact::wfile::load("test/utf8.txt"));
   ASSERT_EQ(x.size(), 3);
   ASSERT_EQ(x.at(0).str().at(0), 'A');
   ASSERT_EQ(x.at(1).str().at(0), 0x00A9);
@@ -202,18 +202,18 @@ TEST_F(ArtifactDenoiserTest, local) {
 }
 
 TEST_F(ArtifactDenoiserTest, http) {
-  const auto x = log::wfile::download("http://www.example.com");
+  const auto x = artifact::wfile::download("http://www.example.com");
   ASSERT_EQ(x.size(), 48);
 }
 
 TEST_F(ArtifactDenoiserTest, https) {
-  const auto x = log::wfile::download("https://www.example.com");
+  const auto x = artifact::wfile::download("https://www.example.com");
   ASSERT_EQ(x.size(), 48);
 }
 
 TEST_F(ArtifactDenoiserTest, large) {
   const auto url = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/drivers/gpu/drm/amd/include/asic_reg/nbio/nbio_6_1_sh_mask.h";
-  const auto x = log::wfile::download(url);
+  const auto x = artifact::wfile::download(url);
   ASSERT_EQ(x.size(), 133634);
 }
 
@@ -232,8 +232,8 @@ TEST_F(ArtifactDenoiserTest, load_config) {
 TEST_F(ArtifactDenoiserTest, line_remove_regex) {
   char local1[] = "test 1234 rofl";
   const char local2[] = "test 1234 rofl";
-  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
-  log::pattern pattern(std::regex("\\d+"));
+  artifact::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  artifact::pattern pattern(std::regex("\\d+"));
   line.remove(pattern);
   ASSERT_EQ(line.str(), local2);
   ASSERT_EQ(line.mut(), "test  rofl");
@@ -242,8 +242,8 @@ TEST_F(ArtifactDenoiserTest, line_remove_regex) {
 TEST_F(ArtifactDenoiserTest, line_remove_regex_multi) {
   char local1[] = "test 1234 1234 rofl";
   const char local2[] = "test 1234 1234 rofl";
-  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
-  log::pattern pattern(std::regex("\\d+"));
+  artifact::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  artifact::pattern pattern(std::regex("\\d+"));
   line.remove(pattern);
   ASSERT_EQ(line.str(), local2);
   ASSERT_EQ(line.mut(), "test   rofl");
@@ -252,8 +252,8 @@ TEST_F(ArtifactDenoiserTest, line_remove_regex_multi) {
 TEST_F(ArtifactDenoiserTest, line_remove_string) {
   char local1[] = "test 1234 rofl";
   const char local2[] = "test 1234 rofl";
-  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
-  log::pattern pattern("1234");
+  artifact::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  artifact::pattern pattern("1234");
   line.remove(pattern);
   ASSERT_EQ(line.str(), local2);
   ASSERT_EQ(line.mut(), "test  rofl");
@@ -262,8 +262,8 @@ TEST_F(ArtifactDenoiserTest, line_remove_string) {
 TEST_F(ArtifactDenoiserTest, line_remove_string_multi) {
   char local1[] = "test 1234 1234 rofl";
   const char local2[] = "test 1234 1234 rofl";
-  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
-  log::pattern pattern("1234");
+  artifact::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  artifact::pattern pattern("1234");
   line.remove(pattern);
   ASSERT_EQ(line.str(), local2);
   ASSERT_EQ(line.mut(), "test   rofl");
@@ -272,8 +272,8 @@ TEST_F(ArtifactDenoiserTest, line_remove_string_multi) {
 TEST_F(ArtifactDenoiserTest, line_suppress_regex) {
   char local1[] = "test 1234 rofl";
   const char local2[] = "test 1234 rofl";
-  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
-  log::pattern pattern(std::regex("\\d+"));
+  artifact::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  artifact::pattern pattern(std::regex("\\d+"));
   line.suppress(pattern);
   ASSERT_EQ(line.str(), local2);
   ASSERT_EQ(line.mut().size(), 0);
@@ -282,8 +282,8 @@ TEST_F(ArtifactDenoiserTest, line_suppress_regex) {
 TEST_F(ArtifactDenoiserTest, line_suppress_string) {
   char local1[] = "test 1234 rofl";
   const char local2[] = "test 1234 rofl";
-  log::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
-  log::pattern pattern("123");
+  artifact::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  artifact::pattern pattern("123");
   line.suppress(pattern);
   ASSERT_EQ(line.str(), local2);
   ASSERT_EQ(line.mut().size(), 0);

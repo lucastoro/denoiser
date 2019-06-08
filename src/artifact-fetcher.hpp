@@ -11,7 +11,7 @@
 #include "logging.hpp"
 #include "encoding.hpp"
 
-namespace log {
+namespace artifact {
 
 template <typename char_t>
 class data_consumer {
