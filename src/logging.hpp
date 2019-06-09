@@ -3,77 +3,50 @@
 #include <iostream>
 #include <sstream>
 
-using log_level_t = size_t;
-using tid_t = pid_t;
+namespace log {
 
-#define LOG_CRITICAL log_level_t(0x1)
-#define LOG_ERROR    log_level_t(0x2)
-#define LOG_WARNING  log_level_t(0x4)
-#define LOG_INFO     log_level_t(0x8)
-#define LOG_PROFILE  log_level_t(0x10)
-#define LOG_DEBUG    log_level_t(0x20)
-#define LOG_DEFAULT  log_level_t(LOG_CRITICAL|LOG_ERROR)
-#define LOG_ALL      log_level_t(0xFFFFFFFF)
-#define LOG_NONE     log_level_t(0)
+  using level_t = size_t;
+  using tid_t = pid_t;
 
-void log_enable(log_level_t lvl);
-void log_disable(log_level_t lvl);
-bool log_has(log_level_t lvl);
-const char* log_gettime();
-tid_t log_gettid();
+  static constexpr level_t critical = 0x1;
+  static constexpr level_t error    = 0x2;
+  static constexpr level_t warning  = 0x4;
+  static constexpr level_t info     = 0x8;
+  static constexpr level_t profile  = 0x10;
+  static constexpr level_t debug    = 0x20;
 
-template <typename C>
-class log_line {
-public:
-  explicit log_line(const char* /* file */,
-                    int /* line */,
-                    const char* /* func */,
-                    std::basic_ostream<C>& os,
-                    log_level_t lvl) : os(os), enabled(log_has(lvl)) {
-    if(enabled) {
-      const char* prefix =
-          lvl == LOG_CRITICAL ? "[ABORT]" :
-          lvl == LOG_ERROR    ? "[ERROR]" :
-          lvl == LOG_WARNING  ? "[WARN.]" :
-          lvl == LOG_INFO     ? "[INFO.]" :
-          lvl == LOG_PROFILE  ? "[PROF.]" :
-          lvl == LOG_DEBUG    ? "[DEBUG]" : "[?????]";
+  void enable(level_t lvl);
+  void disable(level_t lvl);
+  bool has(level_t lvl);
 
-      ss << prefix << " T" << log_gettid() << " " << log_gettime() << " | ";
+  class line final {
+  public:
+    line(const char* file, int line, const char* func, std::ostream& os, level_t lvl);
+    ~line();
+    template <typename T>
+    inline line& operator << (const T& t) {
+      return ss << t, *this;
     }
-  }
-  ~log_line() {
-    if(enabled) {
-      ss << std::endl;
-      os << ss.str();
+    template <typename T>
+    inline line& operator () (const T& t) {
+      return (*this) << t;
     }
-  }
-  template <typename T>
-  log_line& operator << (const T& t) {
-    if(enabled) {
-      ss << t;
+    template <typename T>
+    inline line& operator , (const T& t) {
+      return (*this) << ", " << t;
     }
-    return *this;
-  }
-  template <typename T>
-  log_line& operator () (const T& t) {
-    return (*this) << t;
-  }
-  template <typename T>
-  log_line& operator , (const T& t) {
-    return (*this) << ", " << t;
-  }
-private:
-  std::basic_stringstream<C> ss;
-  std::basic_ostream<C>& os;
-  bool enabled;
-};
+  private:
+    std::stringstream ss;
+    std::ostream& os;
+  };
+} // log
 
-#define log_error    log_line<char>(__FILE__, __LINE__, __FUNCTION__, std::cerr, LOG_ERROR)
-#define log_warning  log_line<char>(__FILE__, __LINE__, __FUNCTION__, std::cerr, LOG_WARNING)
-#define log_info     log_line<char>(__FILE__, __LINE__, __FUNCTION__, std::cerr, LOG_INFO)
-#define log_profile  log_line<char>(__FILE__, __LINE__, __FUNCTION__, std::cerr, LOG_PROFILE)
-#define log_debug    log_line<char>(__FILE__, __LINE__, __FUNCTION__, std::cerr, LOG_DEBUG)
+#define log_cond(x) if (!log::has(x)); else log::line(__FILE__, __LINE__, __FUNCTION__, std::cerr, x)
+#define log_error    log_cond(log::error)
+#define log_warning  log_cond(log::warning)
+#define log_info     log_cond(log::info)
+#define log_profile  log_cond(log::profile)
+#define log_debug    log_cond(log::debug)
 
 #define enforce(x, ...) do { \
   if (not (x)) { \

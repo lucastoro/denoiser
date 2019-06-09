@@ -24,16 +24,16 @@ int main(int argc, char** argv)
   }
 
   if (args.have_flag("--verbose", "-v")) {
-    log_enable(LOG_INFO);
+    log::enable(log::info);
   }
 
   if (args.have_flag("--debug", "-d")) {
-    log_enable(LOG_DEBUG);
-    log_enable(LOG_INFO);
+    log::enable(log::debug);
+    log::enable(log::info);
   }
 
   if (args.have_flag("--profile", "-p")) {
-    log_enable(LOG_PROFILE);
+    log::enable(log::profile);
   }
 
   const bool read_stdin = args.have_flag("--stdin") or (args.back() == "-");
@@ -64,7 +64,7 @@ int main(int argc, char** argv)
       return 1;
     }
 
-    if (log_has(LOG_DEBUG)) {
+    if (log::has(log::debug)) {
       log_debug << config.size() << " artifacts:";
       for (const auto& entry : config) {
         log_debug << " - " << entry.alias << "(" << entry.target << ")";
