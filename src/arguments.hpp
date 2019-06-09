@@ -5,9 +5,11 @@
 
 class arguments {
 public:
+
   arguments(int argc, char** argv)
     : argc(argc), argv(argv) {}
-  bool has_flag(const char* name) const {
+
+  bool have_flag(const char* name) const {
     for (int i = 1; i < argc; ++i) {
       if (0 == strcmp(name, argv[i])) {
         return true;
@@ -15,14 +17,10 @@ public:
     }
     return false;
   }
-  template <typename ...Args>
-  bool has_flag(const char* first, Args... more) const {
-    return has_flag(first) or has_flag(more...);
-  }
 
   template <typename ...Args>
-  bool operator () (const Args... args) const {
-    return has_flag(args...);
+  bool have_flag(const char* first, Args... more) const {
+    return have_flag(first) or have_flag(more...);
   }
 
   std::string_view value(const char* name) const {
@@ -35,6 +33,7 @@ public:
     }
     return {};
   }
+
   template <typename ...Args>
   std::string_view value(const char* first, Args... more) const {
     const auto opt = value(first);

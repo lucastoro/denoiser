@@ -22,33 +22,22 @@ bool log_has(log_level_t lvl);
 const char* log_gettime();
 tid_t log_gettid();
 
-#define logging(file, PREFIX, lvl, ...) do { \
-  if(log_has(lvl)) { \
-    std::stringstream ss; \
-    ss << PREFIX " T" << log_gettid() << " " << log_gettime() << " | " << __VA_ARGS__ << std::endl; \
-    file << ss.str() << std::flush; \
-  } \
-} while(false)
-
 template <typename C>
 class log_line {
 public:
-  explicit log_line(std::basic_ostream<C>& os) : os(os) {
-  }
   explicit log_line(const char* /* file */,
                     int /* line */,
                     const char* /* func */,
                     std::basic_ostream<C>& os,
                     log_level_t lvl) : os(os), enabled(log_has(lvl)) {
     if(enabled) {
-
       const char* prefix =
           lvl == LOG_CRITICAL ? "[ABORT]" :
-          lvl == LOG_ERROR ? "[ERROR]" :
-          lvl == LOG_WARNING ? "[WARN.]" :
-          lvl == LOG_INFO ? "[INFO.]" :
-          lvl == LOG_PROFILE ? "[PROF.]" :
-          lvl == LOG_DEBUG ? "[DEBUG]" : "";
+          lvl == LOG_ERROR    ? "[ERROR]" :
+          lvl == LOG_WARNING  ? "[WARN.]" :
+          lvl == LOG_INFO     ? "[INFO.]" :
+          lvl == LOG_PROFILE  ? "[PROF.]" :
+          lvl == LOG_DEBUG    ? "[DEBUG]" : "[?????]";
 
       ss << prefix << " T" << log_gettid() << " " << log_gettime() << " | ";
     }
@@ -66,26 +55,29 @@ public:
     }
     return *this;
   }
+  template <typename T>
+  log_line& operator () (const T& t) {
+    return (*this) << t;
+  }
+  template <typename T>
+  log_line& operator , (const T& t) {
+    return (*this) << ", " << t;
+  }
 private:
   std::basic_stringstream<C> ss;
   std::basic_ostream<C>& os;
   bool enabled;
 };
 
-#define log_critical log_line<char>(__FILE__, __LINE__, __FUNCTION__, std::cerr, LOG_CRITICAL)
 #define log_error    log_line<char>(__FILE__, __LINE__, __FUNCTION__, std::cerr, LOG_ERROR)
 #define log_warning  log_line<char>(__FILE__, __LINE__, __FUNCTION__, std::cerr, LOG_WARNING)
 #define log_info     log_line<char>(__FILE__, __LINE__, __FUNCTION__, std::cerr, LOG_INFO)
 #define log_profile  log_line<char>(__FILE__, __LINE__, __FUNCTION__, std::cerr, LOG_PROFILE)
 #define log_debug    log_line<char>(__FILE__, __LINE__, __FUNCTION__, std::cerr, LOG_DEBUG)
 
-// #define log_critical(...) do { logging(std::cerr, "[ABORT]", LOG_CRITICAL, __VA_ARGS__); abort(); } while (false)
-// #define log_error(...)   logging(std::cerr, "[ERROR]", LOG_ERROR, __VA_ARGS__)
-// #define log_warning(...) logging(std::cerr, "[WARN.]", LOG_WARNING, __VA_ARGS__)
-// #define log_info(...)    logging(std::cerr, "[INFO.]", LOG_INFO, __VA_ARGS__)
-// #define log_profile(...) logging(std::cerr, "[PROF.]", LOG_PROFILE, __VA_ARGS__)
-// #define log_debug(...)   logging(std::cerr, "[DEBUG]", LOG_DEBUG, __VA_ARGS__)
-
 #define enforce(x, ...) do { \
-  if (not (x)) log_critical << "assertion error: " #x ", " << __VA_ARGS__; \
+  if (not (x)) { \
+    log_error << "assertion error: " #x ", " << __VA_ARGS__; \
+    abort(); \
+  } \
 } while(false)

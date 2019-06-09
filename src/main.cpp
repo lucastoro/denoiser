@@ -14,29 +14,29 @@ int main(int argc, char** argv)
 {
   const arguments args(argc, argv);
 #ifdef WITH_TESTS
-  if (args.has_flag("--test", "-t")) {
+  if (args.have_flag("--test", "-t")) {
     return test::run(argc, argv);
   }
 #endif
-  if (args("--help", "-h")) {
+  if (args.have_flag("--help", "-h")) {
     print_help(argv[0], std::cout);
     return 0;
   }
 
-  if (args("--verbose", "-v")) {
+  if (args.have_flag("--verbose", "-v")) {
     log_enable(LOG_INFO);
   }
 
-  if (args("--debug", "-d")) {
+  if (args.have_flag("--debug", "-d")) {
     log_enable(LOG_DEBUG);
     log_enable(LOG_INFO);
   }
 
-  if (args("--profile", "-p")) {
+  if (args.have_flag("--profile", "-p")) {
     log_enable(LOG_PROFILE);
   }
 
-  const bool read_stdin = args("--stdin") or (args.back() == "-");
+  const bool read_stdin = args.have_flag("--stdin") or (args.back() == "-");
   const auto config_file = args.value("--config", "-c");
 
   if (not read_stdin and config_file.empty()) {
