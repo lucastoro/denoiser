@@ -21,9 +21,9 @@ public:
 
   /**
    * Executes the denoising procedure on each artifact
-   * @param lambda the lambda that will be invoked for each line emitted
-   * @note the signature of the lambda is void lambda(const artifact::basic_line<CharT>& line)
-   * @note the lambda will be invoked in a thread-safe and serialized way in respect of the
+   * \param lambda the lambda that will be invoked for each line emitted
+   * \note the signature of the lambda is void lambda(const artifact::basic_line<CharT>& line)
+   * \note the lambda will be invoked in a thread-safe and serialized way in respect of the
    *       line numbering but the order in which the files will be emitted will not necessarely be
    *       the order in which they are listed in the artifact vector.
    */
@@ -57,9 +57,9 @@ private:
   /**
    * Executes the whole process of downloading and simplifying files, preparing the bucket
    * and performing the final filtering.
-   * @param artifact the descriptor of the artifact to analyze
-   * @param lambda the lambda that will be invoked for each line emitted
-   * @note the signature of the lambda is void lambda(const artifact::basic_line<CharT>& line)
+   * \param artifact the descriptor of the artifact to analyze
+   * \param lambda the lambda that will be invoked for each line emitted
+   * \note the signature of the lambda is void lambda(const artifact::basic_line<CharT>& line)
   */
   template <typename Lambda>
   void process(const configuration<CharT>& artifact, const Lambda& lambda) {
@@ -95,9 +95,9 @@ private:
   /**
    * Uses prepare() to download and normalize a log file, and then uses it to fill a bucket with
    * its hashes.
-   * @param url the remote url to download the file from
-   * @param alias an alias for the file
-   * @param rules there rules to apply to normalize the file
+   * \param url the remote url to download the file from
+   * \param alias an alias for the file
+   * \param rules there rules to apply to normalize the file
   */
   void fill_bucket(const std::string& url,
                    const std::string& alias,
@@ -120,10 +120,10 @@ private:
 
   /**
    * Downloads the file and applies filters and normalizers
-   * @param url the remote url to download the file from
-   * @param alias an alias for the file
-   * @param rules there rules to apply to normalize the file
-   * @return the file ready for analysis
+   * \param url the remote url to download the file from
+   * \param alias an alias for the file
+   * \param rules there rules to apply to normalize the file
+   * \return the file ready for analysis
    */
   artifact::basic_file<CharT> prepare(const std::string& url,
                                  const std::string& alias,

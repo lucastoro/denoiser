@@ -6,6 +6,7 @@
 #include "thread-pool.hpp"
 #include "denoiser.hpp"
 #include <chrono>
+#include <atomic>
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/types.h>
@@ -290,7 +291,7 @@ TEST_F(ArtifactDenoiserTest, line_suppress_string) {
 
 TEST(ThreadPoolTest, single) {
   thread_pool pool(1);
-  int x = 0;
+  std::atomic_int x = 0;
   pool.wait(pool.submit([&x](){
     x = 1;
   }));
@@ -298,9 +299,23 @@ TEST(ThreadPoolTest, single) {
   ASSERT_EQ(x, 1);
 }
 
+TEST(ThreadPoolTest, twice) {
+  thread_pool pool(1);
+  std::atomic_int x = 0;
+  std::vector<thread_pool::id_t> jobs;
+  jobs.emplace_back(pool.submit([&x](){
+    x += 1;
+  }));
+  jobs.emplace_back(pool.submit([&x](){
+    x += 1;
+  }));
+  pool.wait(jobs);
+  ASSERT_EQ(x, 2);
+}
+
 TEST(ThreadPoolTest, double) {
   thread_pool pool(2);
-  int x = 0;
+  std::atomic_int x = 0;
   std::vector<thread_pool::id_t> jobs;
   jobs.emplace_back(pool.submit([&x](){
     x += 1;
