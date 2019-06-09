@@ -156,6 +156,13 @@ class ArtifactDenoiserTest : public testing::Test {
 public:
 };
 
+static std::string ascii(const std::wstring_view& v) {
+  std::string s;
+  s.reserve(v.size());
+  for (auto c : v) s.push_back(char(c));
+  return s;
+}
+
 class DataDrivenTest : public ::testing::Test, public ::testing::WithParamInterface<const char*> {
 public:
   DataDrivenTest(const std::string& path) : path(path) {}
@@ -164,28 +171,18 @@ protected:
     const pushd dir(path);
     const auto config = configuration<wchar_t>::load("config.yaml");
     denoiser<wchar_t> denoiser(config);
-    std::vector<std::wstring_view> result;
+    std::vector<std::wstring> result;
     artifact::wfile expected = artifact::wfile::load("expect.log");
     denoiser.run([&result](const artifact::wline& line){
-      result.push_back(line.str());
+      result.emplace_back(line.str());
     });
-
-    if (expected.size() != result.size()) {
-      wwarn << "Expected:";
-      for (size_t i = 0; i < expected.size(); ++i) {
-        wwarn << "+" << i << " " << expected.at(i).str();
-      }
-      wwarn << "Result:";
-      for (size_t i = 0; i < result.size(); ++i) {
-        wwarn << "+" << i << " " << result.at(i);
-      }
-    }
 
     ASSERT_EQ(expected.size(), result.size());
 
     auto it = result.begin();
     for (const auto& line : expected) {
-      ASSERT_EQ(*it, line.str()); ++it;
+      ASSERT_EQ(*it, line.str()) << "'" << *it << "' != '" << ascii(line.str()) << "'";
+      ++it;
     }
   }
 private:

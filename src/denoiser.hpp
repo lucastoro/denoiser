@@ -8,7 +8,7 @@
 #include <unordered_set>
 #include <future>
 
-#define USE_THREAD_POOL 0
+#define USE_THREAD_POOL 1
 
 #if USE_THREAD_POOL
 #include "thread-pool.hpp"
@@ -147,7 +147,9 @@ private:
 
     return file;
   }
+
 #if USE_THREAD_POOL
+
   template <typename Container, typename Lambda>
   void loop(Container& container, const Lambda& lambda, size_t batch_size = 1000) {
 
@@ -170,29 +172,32 @@ private:
 
     pool.wait(jobs);
   }
+
 #else
+
   template <typename Container, typename Lambda>
-  void loop(Container& container, Lambda&& lambda) {
+  void loop(Container& container, const Lambda& lambda) {
     for (auto& entry : container) {
       lambda(entry);
     }
   }
+
 #endif
 
   void filter(artifact::basic_file<CharT>& file, const patterns<CharT>& rules) {
-    for (auto& line : file) {
+    loop(file, [&rules](auto& line){
       for (const auto& pattern : rules.filters) {
         line.suppress(pattern);
       }
-    }
+    });
   }
 
   void normalize(artifact::basic_file<CharT>& file, const patterns<CharT>& rules) {
-    for (auto& line : file) {
+    loop(file, [&rules](auto& line){
       for (const auto& pattern : rules.normalizers) {
         line.remove(pattern);
       }
-    }
+    });
   }
 
   void compute_hashes(artifact::basic_file<CharT>& file) {

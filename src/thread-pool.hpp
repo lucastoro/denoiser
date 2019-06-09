@@ -55,7 +55,7 @@ public:
   }
 
   template <typename container>
-  typename std::enable_if<not std::is_same<id_t, container>::value>::type
+  typename std::enable_if<not std::is_same<std::remove_cv<id_t>::type, container>::value>::type
   wait(const container& cont) {
     for (const id_t id : cont) {
       wait(id);
