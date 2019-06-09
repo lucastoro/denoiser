@@ -413,7 +413,7 @@ private:
       }
     }
 
-    log_warning("unknown protocol for '" << uri << "'");
+    log_warning << "unknown protocol for '" << uri << "'";
 
     return local;
   }
@@ -427,7 +427,7 @@ private:
       return match[1].str();
     }
 
-    log_warning("no known protocol in '" << uri << "'");
+    log_warning << "no known protocol in '" << uri << "'";
 
     return uri;
   }

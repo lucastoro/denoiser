@@ -40,13 +40,13 @@ int main(int argc, char** argv)
   const auto config_file = args.value("--config", "-c");
 
   if (not read_stdin and config_file.empty()) {
-    log_error("Missing argument, --stdin or --config must be speficied");
+    log_error << "Missing argument, --stdin or --config must be speficied";
     print_help(argv[0], std::cerr);
     return 1;
   }
 
   if (read_stdin and config_file.size()) {
-    log_error("Invalid arguments, cannot specify both --stdin and --config");
+    log_error << "Invalid arguments, cannot specify both --stdin and --config";
     print_help(argv[0], std::cerr);
     return 1;
   }
@@ -60,16 +60,16 @@ int main(int argc, char** argv)
       : configuration<char_t>::load(std::string(config_file));
 
     if (config.empty()) {
-      log_error("Empty configuration");
+      log_error << "Empty configuration";
       return 1;
     }
 
     if (log_has(LOG_DEBUG)) {
-      log_debug(config.size() << " artifacts:");
+      log_debug << config.size() << " artifacts:";
       for (const auto& entry : config) {
-        log_debug(" - " << entry.alias << "(" << entry.target << ")");
+        log_debug << " - " << entry.alias << "(" << entry.target << ")";
         for (const auto& ref : entry.reference) {
-          log_debug("   - " << ref);
+          log_debug << "   - " << ref;
         }
       }
     }

@@ -127,34 +127,6 @@ private:
   std::string path;
 };
 
-template <typename C>
-class log_line {
-public:
-  explicit log_line(std::basic_ostream<C>& os) : os(os) {
-  }
-  template <typename T>
-  explicit log_line(std::basic_ostream<C>& os, const T& t) : os(os) {
-    ss << t;
-  }
-  ~log_line() {
-    ss << std::endl;
-    os << ss.str();
-  }
-  template <typename T>
-  log_line& operator << (const T& t) {
-    ss << t;
-    return *this;
-  }
-private:
-  std::basic_stringstream<C> ss;
-  std::basic_ostream<C>& os;
-};
-
-#define info log_line<char>(std::cout, "[   INFO   ] ")
-#define warn log_line<char>(std::cerr, "[ WARNING  ] ")
-#define winfo log_line<wchar_t>(std::wcout, L"[   INFO   ] ")
-#define wwarn log_line<wchar_t>(std::wcerr, L"[ WARNING  ] ")
-
 class ArtifactDenoiserTest : public testing::Test {
 public:
 };
@@ -327,7 +299,7 @@ TEST(ThreadPoolTest, double) {
   ASSERT_EQ(x, 2);
 }
 
-TEST(ThreadPoolTest, long) {
+TEST(ThreadPoolTest, large) {
   thread_pool pool(7);
   std::vector<int> data(100447);
   for(size_t i = 0; i < data.size(); ++i) {
@@ -348,7 +320,8 @@ bool register_data_driven_tests() {
   for (auto entry : directory("test/ddt")) {
     if (entry.is_directory() and entry.contains("config.yaml")) {
       if (!entry.contains("expect.log")) {
-        warn << "Directory " << entry.name() << " is missing the expect.log file";
+        std::cerr << "[   ERROR  ] Directory " << entry.name()
+                  << " is missing the expect.log file" << std::endl;
         continue;
       }
       ++count;
@@ -360,12 +333,11 @@ bool register_data_driven_tests() {
         // Important to use the fixture type as the return type here.
         [name]() -> DataDrivenTest* { return new DataDrivenTest(name); }
       );
-
-      info << "Registered DDT " << name;
+      std::cerr << "[   INFO   ] Registered DDT " << name << std::endl;
     }
   }
   if (0 == count) {
-    warn << "No DDT found, please check the current directory";
+    std::cerr << "[   ERROR  ] No DDT found, please check the working directory" << std::endl;
   }
 
   return 0 != count;

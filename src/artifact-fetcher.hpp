@@ -53,7 +53,7 @@ private:
   size_t on_data(char* ptr, size_t size) {
 
     if (not decode) {
-      log_warning("unknown encoding, defaulting to UTF8");
+      log_warning << "unknown encoding, defaulting to UTF8";
       decode = encoding::UTF8;
     }
 
@@ -83,7 +83,7 @@ private:
   void parse_content_length(const std::string_view& clength) {
     char temp[128];
     if (sizeof(temp) < clength.size() + 1) {
-      log_warning("invalid Conten-Length field: '" << clength << "'");
+      log_warning << "invalid Conten-Length field: '" << clength << "'";
       observer.size_hint(1024 * 1024);
     } else {
       std::copy(clength.begin(), clength.end(), temp);
@@ -108,7 +108,7 @@ private:
                        begin,
                        end,
                        downloader<char_t>::icase)) {
-          log_debug("using encoding: utf8");
+          log_debug << "using encoding: utf8";
           decode = enco.second;
           found = true;
           break;
@@ -116,11 +116,11 @@ private:
       }
 
       if (not found) {
-        log_warning("unknown content type: " << ctype);
+        log_warning << "unknown content type: " << ctype;
       }
 
     } else {
-      log_debug("Content-Type received, but missing encoding, defaulting to latin1");
+      log_debug << "Content-Type received, but missing encoding, defaulting to latin1";
       decode = encoding::LATIN1;
     }
   }
@@ -176,7 +176,7 @@ public:
           break;
         case encoding::error:
         case encoding::incomplete:
-          log_error("bad char");
+          log_error << "bad char";
           stop = true;
           break;
       }
