@@ -36,7 +36,38 @@ namespace log {
       return (*this) << ", " << t;
     }
   private:
-    std::stringstream ss;
+
+    template <typename C, size_t N>
+    class lallocator {
+    public:
+      using value_type = C;
+      using size_type = size_t;
+      inline value_type* allocate(size_type sz) {
+        if (sz > N) {
+          throw std::out_of_range("log line too long");
+        }
+        return data;
+      }
+      inline void deallocate(value_type*, size_type) {
+      }
+      template <class U>
+      struct rebind { typedef lallocator<U,N> other; };
+      template <typename U>
+      inline bool operator == (const lallocator<U,N>& other) const {
+        return data == other.data;
+      }
+      template <typename U>
+      inline bool operator != (const lallocator<U,N>& other) const {
+        return data != other.data;
+      }
+    private:
+      C data[N];
+    };
+
+    static constexpr size_t max_length = 1024;
+    using traits = std::char_traits<char>;
+    using allocator = lallocator<char, max_length>;
+    std::basic_stringstream<char, traits, allocator> ss;
     std::ostream& os;
   };
 } // log
