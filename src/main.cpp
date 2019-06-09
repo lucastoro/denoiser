@@ -5,24 +5,10 @@
 #include "arguments.hpp"
 #include "denoiser.hpp"
 #include "config.hpp"
+#include "help.hpp"
 #ifdef WITH_TESTS
 #  include "test/test.hpp"
 #endif
-
-static const char* my_name(const char* self) {
-  const auto ptr = strrchr(self, '/');
-  return ptr ? ptr + 1 : self;
-}
-
-static inline void print_help(const char* self, std::ostream& os) {
-  os << "Usage: " << my_name(self) << " [OPTIONS]" << std::endl;
-  os << "OPTIONS:" << std::endl;
-  os << "  --config  -c: read the configuration from the given filename" << std::endl;
-  os << "  --stdin   - : read the configuration from the input stream" << std::endl;
-  os << "  --verbose -v: print information regarding the process to stderr" << std::endl;
-  os << "  --profile -p: print profiling information to stderr" << std::endl;
-  os << "  --debug   -d: print even more information to stderr" << std::endl;
-}
 
 int main(int argc, char** argv)
 {
