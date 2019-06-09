@@ -31,11 +31,10 @@ public:
   explicit inline basic_pattern(const regex_t& rgx) noexcept(std::is_nothrow_copy_constructible<regex_t>::value)
     : value(rgx) {
   }
-
-  bool is_string() const { return std::holds_alternative<string_t>(value); }
-  bool is_regex() const { return std::holds_alternative<regex_t>(value); }
-  const string_t& string() const {return std::get<string_t>(value); }
-  const regex_t& regex() const {return std::get<regex_t>(value); }
+  inline constexpr bool is_string() const { return std::holds_alternative<string_t>(value); }
+  inline constexpr bool is_regex() const { return std::holds_alternative<regex_t>(value); }
+  inline constexpr const string_t& string() const {return std::get<string_t>(value); }
+  inline constexpr const regex_t& regex() const {return std::get<regex_t>(value); }
 private:
   std::variant<regex_t, string_t> value;
 };
@@ -59,7 +58,7 @@ public:
   {}
 
   basic_line(const basic_file<CharT>* fil, size_t num, char_t* ptr, const char_t* optr, size_t size) noexcept
-    : ptr_(ptr), original_ptr_(optr), size_(size), original_size_(size), file_(fil), number_(num), hash_(0)
+    : ptr_(ptr), imm_ptr_(optr), size_(size), imm_size_(size), file_(fil), number_(num), hash_(0)
   {}
 
   basic_line(basic_line&& other) : basic_line() {
@@ -69,14 +68,13 @@ public:
   basic_line& operator = (basic_line&& other) {
     if (this != &other) {
       ptr_ = std::move(other.ptr_);
-      original_ptr_ = std::move(other.original_ptr_);
+      imm_ptr_ = std::move(other.imm_ptr_);
       size_ = std::move(other.size_);
-      original_size_ = std::move(other.size_);
+      imm_size_ = std::move(other.size_);
       file_ = std::move(other.file_);
       number_ = std::move(other.number_);
       hash_ = std::move(other.hash_);
     }
-
     return *this;
   }
 
@@ -89,7 +87,7 @@ public:
   }
 
   string_view str() const noexcept {
-    return string_view(original_ptr_, original_size_);
+    return string_view(imm_ptr_, imm_size_);
   }
 
   void suppress(const basic_pattern<char_t>& pattern) {
@@ -126,7 +124,6 @@ public:
 private:
 
   void trim() {
-
     while (size_ && std::isspace(*ptr_)) {
       ++ptr_;
     }
@@ -145,6 +142,8 @@ private:
       std::copy(it + sz, end(), it); // this MUST be a forward copy
       size_ -= sz;
     }
+
+    trim();
   }
 
   class overwriter : public std::iterator<std::output_iterator_tag, char_t> {
@@ -171,29 +170,21 @@ private:
   };
 
   void remove(const std::basic_regex<char_t>& regex) noexcept {
-
     if (0 == size_) {
       return;
     }
-
     char_t null[] = {0};
     overwriter it(ptr_);
-
     std::regex_replace(it, begin(), end(), regex, null);
-
     size_ = it.get() - ptr_;
-
     trim();
-
     hash_ = 0;
   }
 
   void suppress(const std::basic_string<char_t>& pattern) noexcept {
-
     if (0 == size_) {
       return;
     }
-
     if (std::basic_string<char_t>::npos != str().find(pattern)) {
       size_ = 0;
       hash_ = 0;
@@ -201,11 +192,9 @@ private:
   }
 
   void suppress(const std::basic_regex<char_t>& pattern) noexcept {
-
     if (0 == size_) {
       return;
     }
-
     if (std::regex_search(begin(), end(), pattern)) {
       size_ = 0;
       hash_ = 0;
@@ -232,9 +221,9 @@ private:
   }
 
   char_t* ptr_;
-  const char_t* original_ptr_;
+  const char_t* imm_ptr_;
   size_t size_;
-  size_t original_size_;
+  size_t imm_size_;
   const basic_file<CharT>* file_;
   size_t number_;
   mutable size_t hash_;
@@ -256,16 +245,16 @@ public:
   }
 
   basic_file(basic_file<char_t>&& other) {
-      (*this) = std::move(other);
+    (*this) = std::move(other);
   }
 
   const basic_file<char_t>& operator = (basic_file<char_t>&& other) {
-      if (this != &other) {
-          alias = std::move(other.alias);
-          data = std::move(other.data);
-          table = std::move(other.table);
-      }
-      return *this;
+    if (this != &other) {
+      alias = std::move(other.alias);
+      data = std::move(other.data);
+      table = std::move(other.table);
+    }
+    return *this;
   }
 
   inline ~basic_file() noexcept
@@ -319,14 +308,12 @@ public:
   }
 
   static basic_file<char_t> fetch(const std::string& url, const std::string& alias = {}) {
-
     switch (from(url)) {
       case http:
         return download(url, alias);
       case local:
         return load(remove_protocol(url), alias);
     }
-
     throw std::runtime_error("Unknown protocol");
   }
 
@@ -336,11 +323,9 @@ private:
   struct data_t {
     std::vector<char_t> mut, imm;
     inline size_t size() const {
-      enforce(mut.size() == imm.size(), "male male");
       return mut.size();
     }
     inline size_t capacity() const {
-      enforce(mut.capacity() == imm.capacity(), "male male");
       return mut.capacity();
     }
     inline void reserve(size_t sz) {
@@ -356,7 +341,7 @@ private:
       imm.clear();
     }
     inline const char_t* to_imm(const char_t* mptr) const {
-      return std::next(imm.data(), std::distance(mut.data(), mptr));
+      return imm.data() + std::distance(mut.data(), mptr);
     }
   };
 

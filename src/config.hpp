@@ -8,17 +8,15 @@
 #include <string>
 
 template <typename CharT>
-typename std::enable_if<not std::is_same<char,CharT>::value, std::basic_string<CharT>>::type
+typename std::enable_if<not std::is_same<char, CharT>::value, std::basic_string<CharT>>::type
 static inline convert(const std::string& str) {
   std::basic_string<CharT> ret;
-  for (char c : str) {
-    ret.push_back(CharT(c));
-  }
+  std::transform(str.begin(), str.end(), std::back_inserter(ret), [](char c) { return CharT(c); });
   return ret;
 }
 
 template <typename CharT>
-typename std::enable_if<std::is_same<char,CharT>::value, const std::string&>::type
+typename std::enable_if<std::is_same<char, CharT>::value, const std::string&>::type
 static inline convert(const std::string& str) {
   return str;
 }
@@ -31,7 +29,6 @@ struct patterns {
 
 template <typename CharT>
 class configuration {
-
 public:
   std::string alias;
   std::string target;

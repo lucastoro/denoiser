@@ -8,9 +8,15 @@
 #include <queue>
 #include <unordered_set>
 
+/**
+ * \brief A simple thread pool
+*/
 class thread_pool final {
 public:
+
   using function_t = std::function<void()>;
+
+  // jobs can be referenced using their ID
   using id_t = uint64_t;
 
   /**
@@ -142,6 +148,9 @@ private:
   using lock_guard = std::lock_guard<std::mutex>;
   using unique_lock= std::unique_lock<std::mutex>;
 
+  /**
+   * the workers loop
+  */
   void run() {
     unique_lock lock(mutex);
 
@@ -170,7 +179,8 @@ private:
   }
 
   struct job_t {
-    inline job_t(id_t id, function_t&& func) : id(id), func(std::move(func)) {}
+    inline job_t(id_t id, function_t&& func)
+      : id(id), func(std::move(func)) {}
     id_t id;
     function_t func;
   };
