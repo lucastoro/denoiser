@@ -133,17 +133,19 @@ public:
   }
   template <typename T>
   explicit log_line(std::basic_ostream<C>& os, const T& t) : os(os) {
-    os << t;
+    ss << t;
   }
   ~log_line() {
-    os << std::endl;
+    ss << std::endl;
+    os << ss.str();
   }
   template <typename T>
   log_line& operator << (const T& t) {
-    os << t;
+    ss << t;
     return *this;
   }
 private:
+  std::basic_stringstream<C> ss;
   std::basic_ostream<C>& os;
 };
 
@@ -308,6 +310,22 @@ TEST(ThreadPoolTest, double) {
   }));
   pool.wait(jobs);
   ASSERT_EQ(x, 2);
+}
+
+TEST(ThreadPoolTest, long) {
+  thread_pool pool(7);
+  std::vector<int> data(100447);
+  for(size_t i = 0; i < data.size(); ++i) {
+    data[i] = int(i);
+  }
+
+  static constexpr auto f = [](int x) -> int { return 4 + (x * 2); };
+
+  pool.for_each(data, 89, [](auto& x){ x = f(x); });
+
+  for(size_t i = 0; i < data.size(); ++i) {
+    ASSERT_EQ(data[i], f(int(i))) << "at " << i;
+  }
 }
 
 bool register_data_driven_tests() {

@@ -151,26 +151,8 @@ private:
 #if USE_THREAD_POOL
 
   template <typename Container, typename Lambda>
-  void loop(Container& container, const Lambda& lambda, size_t batch_size = 1000) {
-
-    const auto size = container.size();
-    const auto rest = size % batch_size;
-    const auto runs = size / batch_size + (rest ? 1 : 0);
-
-    std::vector<thread_pool::id_t> jobs;
-    jobs.reserve(runs);
-
-    for (size_t r = 0; r < runs; ++r) {
-      jobs.push_back(pool.submit([lambda, r, runs, batch_size, &container](){
-        auto it = std::next(std::begin(container), r * batch_size);
-        auto end = (r == runs - 1) ? std::end(container) : std::next(it, batch_size);
-        for(; it != end; ++it) {
-          lambda(*it);
-        }
-      }));
-    }
-
-    pool.wait(jobs);
+  void loop(Container& container, const Lambda& lambda) {
+    pool.for_each(container, 1000, lambda);
   }
 
 #else

@@ -62,6 +62,50 @@ public:
     }
   }
 
+  template <typename It>
+  struct is_random_iterator : public std::integral_constant<bool, std::is_same<
+    typename std::iterator_traits<It>::iterator_category,
+    std::random_access_iterator_tag
+  >::value> {};
+
+  template <typename Cn>
+  struct is_random_container : public std::integral_constant<bool,
+    is_random_iterator<typename Cn::iterator>::value>
+  {};
+
+  template <typename Iterator, typename Lambda>
+  typename std::enable_if<is_random_iterator<Iterator>::value>::type
+  for_each(const Iterator& begin,
+                const Iterator& end,
+                size_t batch_size,
+                const Lambda& lambda) {
+
+    const auto size = std::distance(begin, end);
+    const auto rest = size % batch_size;
+    const auto runs = size / batch_size + (rest ? 1 : 0);
+
+    std::vector<thread_pool::id_t> jobs;
+    jobs.reserve(runs);
+
+    for (size_t r = 0; r < runs; ++r) {
+      jobs.push_back(submit([lambda, r, runs, batch_size, &begin, &end](){
+        auto it = std::next(begin, r * batch_size);
+        auto last = (r == runs - 1) ? end : std::next(it, batch_size);
+        for(; it != last; ++it) {
+          lambda(*it);
+        }
+      }));
+    }
+
+    wait(jobs);
+  }
+
+  template <typename Container, typename Lambda>
+  typename std::enable_if<is_random_container<Container>::value>::type
+  for_each(Container& container, size_t batch_size, const Lambda& lambda) {
+    for_each(std::begin(container), std::end(container), batch_size, lambda);
+  }
+
 private:
 
   using lock_guard = std::lock_guard<std::mutex>;
@@ -83,9 +127,9 @@ private:
         auto job = std::move(queue.front());
         queue.pop();
         lock.unlock();
-        job.second();
+        job.func();
         lock.lock();
-        ids.erase(job.first);
+        ids.erase(job.id);
         cond.notify_all();
       }
     }
@@ -94,9 +138,15 @@ private:
     cond.notify_all();
   }
 
+  struct job_t {
+    inline job_t(id_t id, function_t&& func) : id(id), func(std::move(func)) {}
+    id_t id;
+    function_t func;
+  };
+
   std::vector<std::thread> pool;
   std::unordered_set<id_t> ids;
-  std::queue<std::pair<id_t, function_t>> queue;
+  std::queue<job_t> queue;
   std::mutex mutex;
   std::condition_variable cond;
   size_t workers;
