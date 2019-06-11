@@ -1,0 +1,11 @@
+language: minimal
+
+services:
+  - docker
+
+script:
+  - cd test
+  - docker build -t denoiser-test .
+  - cd ..
+  - docker run --rm -v $PWD:/test -w /test denoiser-test
+
