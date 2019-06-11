@@ -8,27 +8,29 @@
 static constexpr const char* HELP =
    "Denoise a document ('artifact') removing parts occurring in other artifacts, discarding"
 nl "file-specific informations."
-nl "TODO: Insert reference to the algorithm source"
 nl
 nl "OPTIONS:"
-nl " --config    -c: read the configuration from the given filename"
-nl " --stdin     - : read the configuration from the input stream"
+nl " --config    -c: read the configuration from the given filename instead from stdin"
 nl " --directory -d: change the working directory to the given path"
+nl " --jobs      -j: use the given number of threads, defaults to the number of hw threads"
 nl " --verbose   -v: print information regarding the process to stderr"
 nl " --profile   -p: print profiling information to stderr"
 nl " --debug     -d: print even more information to stderr"
+#if WITH_TESTS
+nl " --test      -t: executes the unit tests"
+nl " --gtest_*     : in combination of --test will be forwarded to the gtest test suite"
+#endif
 nl
-nl "The --config and --stding options are mutually exclusive and exactly"
-nl "one of them must be specified."
+nl "By default the application read the configuration from the standard input stream."
 nl
 nl "CONFIGURATION:"
 nl "The configuration file is a YAML file composed of 3 section:"
 nl " - the 'filters' section contains a list of patterns (see the PATTERNS section below) that will"
-nl "   cause corrispective whole lines to be discarded by the denoiser algorithm."
+nl "   cause corresponding whole lines to be discarded by the denoiser algorithm."
 nl "   Filters are useful when you know that some line in the artifact won't be of any interest."
 nl "   So for instance if you want to ignore all 'debug' lines you will add an entry in the filters"
 nl "   section containing a pattern selecting those lines (e.g. '[DEBUG]' or '[D]'...)."
-nl " - the 'normalizers' section contains a list of patterns that will cause corrispective entries"
+nl " - the 'normalizers' section contains a list of patterns that will cause corresponding entries"
 nl "   to be ingored by the denoiser algorithm."
 nl "   Normalizers are used when there are instance-specific informations in the log that you want"
 nl "   to flatten out, like dates, PIDs, IP addresses, UUIDs and so on."
@@ -79,7 +81,10 @@ nl "#  artifacts:"
 nl "#  - alias: project-output # a simple mnemonic"
 nl "#    target: file://output.log # this will load the output.log file from disk"
 nl "#    reference:"
-nl "#    - https://logs.localhost://succesfull.log # this will download the file via HTTPS";
+nl "#    - https://logs.localhost://succesfull.log # this will download the file via HTTPS"
+nl
+nl "REFERENCES"
+nl " - http://www.ranum.com/security/computer_security/papers/ai";
 
 #undef nl
 

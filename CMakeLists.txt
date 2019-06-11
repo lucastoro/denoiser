@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 option(DENOISER_TESTS "Build the unit test suite" ON)
+option(DENOISER_THREAD_POOL "Enable the thread pool" ON)
 
 add_subdirectory(yaml-cpp)
 add_subdirectory(curlpp)
@@ -24,6 +25,11 @@ add_executable(${PROJECT_NAME} ${headers} ${sources})
 target_link_libraries(${PROJECT_NAME} yaml-cpp)
 target_link_libraries(${PROJECT_NAME} curlpp)
 target_link_libraries(${PROJECT_NAME} pthread)
+
+
+if(DENOISER_THREAD_POOL)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_THREAD_POOL)
+endif()
 
 if(DENOISER_TESTS)
   target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_TESTS)

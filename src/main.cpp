@@ -1,5 +1,6 @@
 #include <iostream>
 #include <unistd.h>
+#include <cstdlib>
 #include "artifact.hpp"
 #include "profile.hpp"
 #include "arguments.hpp"
@@ -32,6 +33,18 @@ int main(int argc, char** argv)
     log::enable(log::profile);
   }
 
+#ifdef WITH_THREAD_POOL
+  if (args.have_flag("--jobs", "-j")) {
+    const auto count = args.value<size_t>("--jobs", "-j");
+    if (0 == count) {
+      std::cerr << "invalid value for the --jobs option" << std::endl;
+      print_help(argv[0], std::cerr);
+      return 1;
+    }
+    thread_pool::set_max_threads(count);
+  }
+#endif
+
   if (args.have_flag("--directory", "-d")) {
     const auto path = args.value("--directory", "-d");
     if (0 != chdir(path.data())) { // is null terminated anyway
@@ -47,26 +60,13 @@ int main(int argc, char** argv)
   }
 #endif
 
-  const bool read_stdin = args.have_flag("--stdin") or (args.back() == "-");
-  const auto config_file = args.value("--config", "-c");
-
-  if (not read_stdin and config_file.empty()) {
-    log_error << "Missing argument, --stdin or --config must be speficied";
-    print_help(argv[0], std::cerr);
-    return 1;
-  }
-
-  if (read_stdin and config_file.size()) {
-    log_error << "Invalid arguments, cannot specify both --stdin and --config";
-    print_help(argv[0], std::cerr);
-    return 1;
-  }
-
   try {
 
     using char_t = wchar_t;
 
-    const auto config = read_stdin
+    const auto config_file = args.value("--config", "-c");
+
+    const auto config = config_file.empty()
       ? configuration<char_t>::read(std::cin)
       : configuration<char_t>::load(std::string(config_file));
 

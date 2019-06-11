@@ -22,59 +22,25 @@ public:
   /**
    * c'tor, prepares and starts the thread pool
   */
-  thread_pool(size_t threads = std::thread::hardware_concurrency())
-    : workers(0), stop(false), id_counter(0) {
-    unique_lock lock(mutex);
-    pool.reserve(threads);
-    for (size_t i = 0; i < threads; ++i ) {
-      pool.emplace_back([this](){ this->run(); });
-    }
-
-    while (workers != threads) {
-      cond.wait(lock);
-    }
-  }
+  thread_pool(size_t threads = 0);
 
   /**
    * d'tor, wait for all the jobs to complete
   */
-  ~thread_pool() {
-    unique_lock lock(mutex);
-    stop = true;
-    cond.notify_all();
-    while (workers != 0) {
-      cond.wait(lock);
-    }
-
-    for (auto& thread : pool) {
-      thread.join();
-    }
-  }
+  ~thread_pool();
 
   /**
    * schedule a job
    * \param func the opeation to execute
    * \return the id of the scheduled operation
   */
-  id_t submit(function_t&& func) {
-    unique_lock lock(mutex);
-    ++id_counter;
-    ids.insert(id_counter);
-    queue.emplace(id_counter, std::move(func));
-    cond.notify_all();
-    return id_counter;
-  }
+  id_t submit(function_t&& func);
 
   /**
    * wait for job to complete
    * \param id the job id
   */
-  void wait(id_t id) {
-    unique_lock lock(mutex);
-    while (ids.count(id)) {
-      cond.wait(lock);
-    }
-  }
+  void wait(id_t id);
 
   /**
    * wait for multiple jobs to complete
@@ -143,40 +109,14 @@ public:
     for_each(std::begin(container), std::end(container), batch_size, lambda);
   }
 
+  static void set_max_threads(size_t);
+
 private:
 
   using lock_guard = std::lock_guard<std::mutex>;
   using unique_lock= std::unique_lock<std::mutex>;
 
-  /**
-   * the workers loop
-  */
-  void run() {
-    unique_lock lock(mutex);
-
-    ++workers;
-    cond.notify_all();
-
-    while (not stop) {
-
-      while (not stop and queue.empty()) {
-        cond.wait(lock);
-      }
-
-      while (not queue.empty()) {
-        const auto job = std::move(queue.front());
-        queue.pop();
-        lock.unlock();
-        job.func();
-        lock.lock();
-        ids.erase(job.id);
-        cond.notify_all();
-      }
-    }
-
-    --workers;
-    cond.notify_all();
-  }
+  void run();
 
   struct job_t {
     inline job_t(id_t id, function_t&& func)
@@ -193,4 +133,5 @@ private:
   size_t workers;
   bool stop;
   id_t id_counter;
+  static size_t max_threads;
 };

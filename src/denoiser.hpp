@@ -10,7 +10,7 @@
 
 #define USE_THREAD_POOL 1
 
-#if USE_THREAD_POOL
+#ifdef WITH_THREAD_POOL
 #include "thread-pool.hpp"
 #endif
 

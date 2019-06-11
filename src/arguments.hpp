@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <string_view>
+#include <cstdlib>
 
 class arguments {
 public:
@@ -40,6 +41,12 @@ public:
     return opt.size() ? opt : value(more...);
   }
 
+  template <typename Ret, typename ...Args>
+  Ret value(const char* first, Args... more) const {
+    const std::string_view sw = value(more...);
+    return std::is_integral<Ret>::value ? Ret(to_int(sw)) : Ret(to_double(sw));
+  }
+
   std::string_view back() const {
     return argv[argc - 1];
   }
@@ -62,6 +69,17 @@ public:
   const_iterator end() const { return argv + argc; }
 
 private:
+
+  static int to_int(const std::string_view& sw) {
+    if (sw.empty()) return int();
+    return atoi(sw.data());
+  }
+
+  static double to_double(const std::string_view& sw) {
+    if (sw.empty()) return double();
+    return std::strtod(sw.data(), nullptr);
+  }
+
   int argc;
   char** argv;
 };

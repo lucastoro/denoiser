@@ -388,8 +388,8 @@ private:
   static source_t from(const std::string& uri) {
 
     static const std::pair<std::regex, source_t> protocols[] = {
-      std::make_pair(std::regex(R"(^https?:\/\/([\w\-\.\/\_\~]+))"), http),
-      std::make_pair(std::regex(R"(^file:\/\/([\w\-\.\/\_\~]+))"), local)
+      std::make_pair(std::regex(R"(^https?:\/{2}([\w\-\.\/\_\~]+))"), http),
+      std::make_pair(std::regex(R"(^file:\/{2}([\w\-\.\/\_\~]+))"), local)
     };
 
     for (const auto& pair : protocols) {
