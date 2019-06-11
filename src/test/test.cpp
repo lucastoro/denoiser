@@ -194,10 +194,10 @@ TEST_F(ArtifactDenoiserTest, load_config_missing) {
 }
 
 TEST_F(ArtifactDenoiserTest, load_config) {
-  const auto config = configuration<wchar_t>::load("test/test1.yaml");
-  ASSERT_EQ(config.size(), 5);
+  const auto config = configuration<wchar_t>::load("test/test.yaml");
+  ASSERT_EQ(config.size(), 2);
   for (const auto& entry : config) {
-    ASSERT_EQ(entry.reference.size(), 3);
+    ASSERT_EQ(entry.reference.size(), 2);
   }
 }
 
