@@ -60,7 +60,7 @@ written on the standard error stream.
 
 ### Configuration file
 The configuration file is a YAML file composed of 3 section:
- - the `filters` section contains a list of patterns (see the PATTERNS section below) that will cause corresponding
+ - the `filters` section contains a list of patterns (see the Patterns section below) that will cause corresponding
    whole lines to be discarded by the denoiser algorithm.
    Filters are useful when you know that some line in the artifact won't be of any interest.
    So for instance if you want to ignore all 'debug' lines you will add an entry in the filters section containing a
@@ -134,12 +134,6 @@ This implementation relies heavily on multi-threading (in particular when built 
 enabled). By default the denoiser will use all CPU cores available, you can change this behavior via the `--job`
 option ("a la make").
 
-To speed up things a little in this implementation there is a "filtering" step executed before everything else that
-may be used to skip lines that can be considered non useful prior to processing, it may apply to headers or known non
-relevant content. The filters are applied in the same way as the "normalizers" with the only difference being that
-while normalizers would cause the algorithm to ignore only the matching part of the string, the filter would discard the
-whole line.
-
 ## Building
 This is a pretty standard [CMake](https://cmake.org) project, as usual the pattern is
 ```
@@ -153,15 +147,14 @@ make -j [nr of cores]
 ## Testing
 When built with the `WITH_TESTS` option enabled (the default) the project will contain a number of unit tests that can
 be executed with the `--test` flag. The test suite is built with the [Google Test](https://github.com/google/googletest)
-library and all relevant flags (`--gtest_filter`, `--gtest_repeat`...) will be forwarded to it.  
+library and all relevant flags (`--gtest_filter`, `--gtest_repeat`...) will be forwarded to it.
+
 While being developed mostly for some level of CI testing, it is also possible to execute the test suite using
-[Docker](https://www.docker.com/), in such case the compilation will generate an image, compile the source code and run
-the test cases.
+[Docker](https://www.docker.com/), in such case the process will generate an image, compile the source code and run
+the test cases inside the container, it may be triggered invoking the `test/run.sh` script.
 
 ## References and Thanks
 http://www.ranum.com/security/computer_security/papers/ai for the idea.  
 Thanks to **Marco Pensallorto** for the inspiration.
-
-Luca Castoro 2019
 
 [![Build Status](https://travis-ci.org/lucastoro/denoiser.svg?branch=master)](https://travis-ci.org/lucastoro/denoiser)
