@@ -1,5 +1,5 @@
 #include <iostream>
-
+#include <unistd.h>
 #include "artifact.hpp"
 #include "profile.hpp"
 #include "arguments.hpp"
@@ -13,11 +13,7 @@
 int main(int argc, char** argv)
 {
   const arguments args(argc, argv);
-#ifdef WITH_TESTS
-  if (args.have_flag("--test", "-t")) {
-    return test::run(argc, argv);
-  }
-#endif
+
   if (args.have_flag("--help", "-h")) {
     print_help(argv[0], std::cout);
     return 0;
@@ -35,6 +31,21 @@ int main(int argc, char** argv)
   if (args.have_flag("--profile", "-p")) {
     log::enable(log::profile);
   }
+
+  if (args.have_flag("--directory", "-d")) {
+    const auto path = args.value("--directory", "-d");
+    if (0 != chdir(path.data())) { // is null terminated anyway
+      std::cerr << strerror(errno) << std::endl;
+      return 1;
+    }
+    log_debug << "Current directory changed to " << path;
+  }
+
+#ifdef WITH_TESTS
+  if (args.have_flag("--test", "-t")) {
+    return test::run(argc, argv);
+  }
+#endif
 
   const bool read_stdin = args.have_flag("--stdin") or (args.back() == "-");
   const auto config_file = args.value("--config", "-c");
