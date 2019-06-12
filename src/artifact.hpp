@@ -201,6 +201,12 @@ private:
     }
   }
 
+  friend basic_file<char_t>;
+
+  void rebind(const basic_file<CharT>* file) {
+    file_ = file;
+  }
+
   basic_line(const basic_line&) = delete;
   basic_line& operator = (const basic_line&) = delete;
 
@@ -253,6 +259,9 @@ public:
       alias = std::move(other.alias);
       data = std::move(other.data);
       table = std::move(other.table);
+      for (line_t& line : table) {
+        line.rebind(this);
+      }
     }
     return *this;
   }
