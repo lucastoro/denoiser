@@ -68,7 +68,12 @@ The process output is always written on the standard output stream, while errors
 written on the standard error stream.
 
 ### Configuration file
-The configuration file is a YAML file composed of 3 section:
+The configuration file is a YAML file composed of 5 section:
+ - the `alias` section will hold a simple mnemonic name for the processing.
+ - the `target` section will tell the algorithm from where to load the target ("bad") log file.
+ - the `reference` section holds a list of other artifacts from which to generate the reference table. Note that it
+   is possible (though not necessary) to specify multiple "reference" ("good") files from which to build the hash set.
+   All files will participate in filling the hash bucket. 
  - the `filters` section contains a list of patterns (see the Patterns section below) that will cause corresponding
    whole lines to be discarded by the denoiser algorithm.
    Filters are useful when you know that some line in the artifact won't be of any interest.
@@ -80,8 +85,6 @@ The configuration file is a YAML file composed of 3 section:
    dates, PIDs, IP addresses, UUIDs and so on.
    So let's say you want to normalize out all `hh:mm::ss` times from the log you would add something like
    `\\d{2}:\\d{2}:\\d{2}` in the normalizers section.
- - the `artifacts` section contains a list configuration entries, one for each artifact to process, see the section
-   Artifacts below for more informations on the format.
 
 ### Patterns
 Each entry in the patterns section may be a string or a regular expression.
@@ -89,22 +92,9 @@ In the YAML file each entry is represented by a `key:value` pair, where the key 
 pattern is a string, or a "r" indicating that the pattern is a regular expression.
 Both strings and regular expressions are evaluated case-sensitive, strings will be searched inside
 
-### Artifacts
-Each artifact configuration will contain 3 sections:
- - the `alias` subsection will hold a simple mnemonic name for the given artifact.
- - the `target` subsection will tell the algorithm from where to load the target ("bad") log file.
- - the `reference` subsection holds a list of other artifacts from which to generate the reference table. Note that it
-   is possible (though not necessary) to specify multiple "reference" ("good") files from which to build the hash set.
-   All files will participate in filling the hash bucket. 
-
 Artifacts can be loaded from the local hard drive or downloaded from the web through the HTTP(S) protocol.
 To specify a local artifact use the `file://` protocol specifier, while when downloading from the web, use either
 `http://` or `https://` accordingly. Local artifacts are always searched from the current working directory.
-
-It is possible to specify multiple entries in the `artifacts` section, in such a case the process will emit special
-"decorators" in the form `--- begin [ARTIFACT NAME] ---` and `--- end [ARTIFACT NAME] ---`that will help separate the
-different processing results. Please note that the order in which the artifacts are processed is unknown and only
-depends on how long it takes to process the given artifacts. 
 
 #### A word about the file:// protocol
 The `file://` protocol used in this work may look similar to the [File URI Scheme](https://tools.ietf.org/html/rfc8089)
@@ -126,16 +116,11 @@ normalizers: # the normalizers section will discard specific portions
  - s: 'luca' # this string will cause all occurences of 'luca' to be ignored
  - r: '\\d{2}:\\d{2}:\\d{2}' # this reg. expression will cause all 'dd:mm:ss' dates to be ignored
 
-artifacts:
- - alias: project-output # a simple mnemonic
-   target: file://output.log # this will load the output.log file from disk
-   reference:"
-    - https://logs.localhost:/succesfull.log # this will download the file via HTTPS
- - alias: install.log # a simple mnemonic
-   target: file:///var/log/install.log
-   reference:"
-    - http://logs.localhost:/log-0001.log # here we use 2 different "reference" files
-    - http://logs.localhost:/log-0002.log
+alias: project-output # a simple mnemonic
+target: file://output.log # this will load the output.log file from disk
+reference:
+ - http://logs.localhost:/log-0001.log # here we use 3 different "reference" files, one fetched through HTTP
+ - https://logs.localhost:/log-0002.log # the other through HTTPS
 ```
 
 ### Unicode support
