@@ -195,10 +195,11 @@ TEST_F(ArtifactDenoiserTest, load_config_missing) {
 
 TEST_F(ArtifactDenoiserTest, load_config) {
   const auto config = configuration<wchar_t>::load("test/test.yaml");
-  ASSERT_EQ(config.size(), 2);
-  for (const auto& entry : config) {
-    ASSERT_EQ(entry.reference.size(), 2);
-  }
+  ASSERT_EQ(config.alias, "artifact1");
+  ASSERT_EQ(config.target, "file://target-1.log");
+  ASSERT_EQ(config.reference.size(), 2);
+  ASSERT_EQ(config.reference.at(0), "file://reference-11.log");
+  ASSERT_EQ(config.reference.at(1), "file://reference-12.log");
 }
 
 TEST_F(ArtifactDenoiserTest, line_remove_regex) {

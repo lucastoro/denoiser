@@ -305,7 +305,7 @@ public:
   }
 
 private:
-  enum source_t {local, http};
+  enum source_t {unknown, local, http};
 public:
 
   static basic_file<char_t> download(const std::string& url, const std::string& alias = {}) {
@@ -322,6 +322,8 @@ public:
         return download(url, alias);
       case local:
         return load(remove_protocol(url), alias);
+      default:
+        break;
     }
     throw std::runtime_error("Unknown protocol");
   }
@@ -362,20 +364,20 @@ private:
   }
 
   // data_consumer
-  virtual void on_data(char_t* ptr, size_t count) override {
+  virtual void on_data(const char_t* ptr, size_t count) override {
     for (size_t i = 0; i < count; ++i) {
       data.push_back(ptr[i]);
     }
   }
 
   inline basic_file(std::istream& stream, const std::string& alias = {})
-    : alias(alias) {
+      : alias(alias) {
     read_stream(stream);
     build_table();
   }
 
   inline basic_file(source_t source, const std::string& resource, const std::string& alias = {})
-    : alias(alias) {
+      : alias(alias) {
     switch (source) {
       case local: {
         std::ifstream stream(resource, std::ios_base::in | std::ios_base::binary);
@@ -391,6 +393,9 @@ private:
         build_table();
         break;
       }
+      default:
+        throw std::runtime_error("invalid source type");
+        break;
     }
   }
 
@@ -408,8 +413,7 @@ private:
     }
 
     log_warning << "unknown protocol for '" << uri << "'";
-
-    return local;
+    return unknown;
   }
 
   static std::string remove_protocol(const std::string& uri) {
@@ -422,7 +426,6 @@ private:
     }
 
     log_warning << "no known protocol in '" << uri << "'";
-
     return uri;
   }
 

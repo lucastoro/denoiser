@@ -3,22 +3,32 @@
 #include <iostream>
 #include <sstream>
 
-//#define CUSTOM_ALLOCATOR
-
 namespace log {
 
   using level_t = size_t;
   using tid_t = pid_t;
 
-  static constexpr level_t critical = 0x1;
-  static constexpr level_t error    = 0x2;
-  static constexpr level_t warning  = 0x4;
-  static constexpr level_t info     = 0x8;
-  static constexpr level_t profile  = 0x10;
-  static constexpr level_t debug    = 0x20;
+  static constexpr level_t error    = 0x1;
+  static constexpr level_t warning  = 0x2;
+  static constexpr level_t info     = 0x4;
+  static constexpr level_t profile  = 0x8;
+  static constexpr level_t debug    = 0x10;
 
   void enable(level_t lvl);
   void disable(level_t lvl);
+
+  template <typename ...Args>
+  static inline void enable(level_t first, Args ...tail) {
+    enable(first);
+    enable(tail...);
+  }
+
+  template <typename ...Args>
+  static inline void disable(level_t first, Args ...tail) {
+    disable(first);
+    disable(tail...);
+  }
+
   bool has(level_t lvl);
 
   class line final {
@@ -38,45 +48,7 @@ namespace log {
       return (*this) << ", " << t;
     }
   private:
-#ifdef CUSTOM_ALLOCATOR
-    template <typename C, size_t N>
-    class lallocator {
-    public:
-      using value_type = C;
-      using size_type = size_t;
-      inline value_type* allocate(size_type sz) {
-        if (sz > N) {
-          throw std::out_of_range("log line too long");
-        }
-        return data_;
-      }
-      inline void deallocate(value_type*, size_type) {
-      }
-      template <class U>
-      struct rebind { typedef lallocator<U,N> other; };
-      template <typename U>
-      inline bool operator == (const lallocator<U,N>& other) const {
-        return data_ == other.data_;
-      }
-      template <typename U>
-      inline bool operator != (const lallocator<U,N>& other) const {
-        return data_ != other.data_;
-      }
-      const C* data() const {
-        return data_;
-      }
-    private:
-      C data_[N];
-    };
-    static constexpr size_t max_length = 1024;
-    using allocator_type = lallocator<char, max_length>;
-#else
-    using allocator_type = std::stringstream::allocator_type;
-#endif
-    using traits_type = std::stringstream::traits_type;
-    using char_type = std::stringstream::char_type;
-
-    std::basic_stringstream<char_type, traits_type, allocator_type> ss;
+    std::stringstream ss;
     std::ostream& os;
   };
 } // log

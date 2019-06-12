@@ -21,12 +21,11 @@ int main(int argc, char** argv)
   }
 
   if (args.have_flag("--verbose", "-v")) {
-    log::enable(log::info);
+    log::enable(log::info, log::warning);
   }
 
   if (args.have_flag("--debug", "-d")) {
     log::enable(log::debug);
-    log::enable(log::info);
   }
 
   if (args.have_flag("--profile", "-p")) {
@@ -71,21 +70,6 @@ int main(int argc, char** argv)
     const auto config = config_file.empty()
       ? configuration<char_t>::read(std::cin)
       : configuration<char_t>::load(std::string(config_file));
-
-    if (config.empty()) {
-      log_error << "Empty configuration";
-      return 1;
-    }
-
-    if (log::has(log::debug)) {
-      log_debug << config.size() << " artifacts:";
-      for (const auto& entry : config) {
-        log_debug << " - " << entry.alias << "(" << entry.target << ")";
-        for (const auto& ref : entry.reference) {
-          log_debug << "   - " << ref;
-        }
-      }
-    }
 
     std::string current = {};
     denoiser<char_t> denoiser(config);

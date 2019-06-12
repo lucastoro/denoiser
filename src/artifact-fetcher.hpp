@@ -17,7 +17,7 @@ template <typename char_t>
 class data_consumer {
 public:
   virtual void size_hint(size_t) = 0;
-  virtual void on_data(char_t* data, size_t count) = 0;
+  virtual void on_data(const char_t* data, size_t count) = 0;
 };
 
 template <typename char_t>

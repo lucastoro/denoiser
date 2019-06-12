@@ -7,14 +7,8 @@ normalizers:
 - s: 'luca'
 - r: '\d{2}:\d{2}:\d{2}'
 
-artifacts:
-- alias: artifact1
-  target: file://target-1.log
-  reference:
-  - file://reference-11.log
-  - file://reference-12.log
-- alias: artifact2
-  target: file://target-2.log
-  reference:
-  - file://reference-21.log
-  - file://reference-22.log
+alias: artifact1
+target: file://target-1.log
+reference:
+- file://reference-11.log
+- file://reference-12.log

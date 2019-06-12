@@ -7,7 +7,7 @@
 
 namespace log {
 
-static level_t log_level = (critical|error);
+static level_t log_level = error;
 
 void enable(level_t lvl) {
   log_level |= lvl;
@@ -50,7 +50,6 @@ line::line(const char* file,
                   level_t lvl)
     : os(os) {
   const char* prefix =
-      lvl == log::critical ? "[ABORT]" :
       lvl == log::error    ? "[ERROR]" :
       lvl == log::warning  ? "[WARN.]" :
       lvl == log::info     ? "[INFO.]" :

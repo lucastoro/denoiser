@@ -43,7 +43,7 @@ public:
 
   template <typename Ret, typename ...Args>
   Ret value(const char* first, Args... more) const {
-    const std::string_view sw = value(more...);
+    const std::string_view sw = value(first, more...);
     return std::is_integral<Ret>::value ? Ret(to_int(sw)) : Ret(to_double(sw));
   }
 

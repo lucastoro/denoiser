@@ -7,8 +7,7 @@ normalizers:
 - s: 'luca'
 - r: '\d{2}:\d{2}:\d{2}'
 
-artifacts:
-- alias: test-env1
-  target: file://target.log
-  reference:
-  - file://ref1.log
+alias: test-env1
+target: file://target.log
+reference:
+- file://ref1.log
