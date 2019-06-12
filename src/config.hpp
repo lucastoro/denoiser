@@ -7,17 +7,16 @@
 #include <type_traits>
 #include <string>
 
-template <typename CharT>
-typename std::enable_if<not std::is_same<char, CharT>::value, std::basic_string<CharT>>::type
-static inline convert(const std::string& str) {
-  std::basic_string<CharT> ret;
-  std::transform(str.begin(), str.end(), std::back_inserter(ret), [](char c) { return CharT(c); });
+template <typename To, typename From>
+typename std::enable_if<sizeof(From) < sizeof(To), std::basic_string<To>>::type
+static inline convert(const std::basic_string<From>& str) {
+  std::basic_string<To> ret;
+  std::transform(str.begin(), str.end(), std::back_inserter(ret), [](From c) { return To(c); });
   return ret;
 }
 
 template <typename CharT>
-typename std::enable_if<std::is_same<char, CharT>::value, const std::string&>::type
-static inline convert(const std::string& str) {
+static inline const std::basic_string<CharT>& convert(const std::basic_string<CharT>& str) {
   return str;
 }
 

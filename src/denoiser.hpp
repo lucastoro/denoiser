@@ -67,8 +67,8 @@ private:
    * \return the file ready for analysis
    */
   artifact::basic_file<CharT> prepare(const std::string& url,
-                                 const std::string& alias,
-                                 const patterns<CharT>& rules) {
+                                      const std::string& alias,
+                                      const patterns<CharT>& rules) {
 
     artifact::basic_file<CharT> file;
 
@@ -103,6 +103,10 @@ private:
                    const patterns<CharT>& rules) {
 
     const auto file = prepare(url, alias, rules);
+
+    // access to the bucket must be synchronized
+    std::lock_guard<std::mutex> lock(mutex);
+
     const auto bucket_size = (file.size() * 3) / 2;
 
     if(bucket.size() < bucket_size) {
@@ -156,6 +160,7 @@ private:
 
   const configuration<CharT>& config;
   std::unordered_set<size_t> bucket;
+  std::mutex mutex;
   curlpp::Cleanup curlpp_;
 #if USE_THREAD_POOL
   thread_pool pool;
