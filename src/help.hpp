@@ -12,6 +12,7 @@ nl
 nl "OPTIONS:"
 nl " --config    -c: read the configuration from the given filename instead from stdin"
 nl " --directory -d: change the working directory to the given path"
+nl " --no-lines  -n: do not output line numbers in the output"
 nl " --jobs      -j: use the given number of threads, defaults to the number of hw threads"
 nl " --verbose   -v: print information regarding the process to stderr"
 nl " --profile   -p: print profiling information to stderr"

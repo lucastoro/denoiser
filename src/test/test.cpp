@@ -211,6 +211,16 @@ TEST_F(ArtifactDenoiserTest, line_remove_regex) {
   ASSERT_EQ(line.mut(), "test  rofl");
 }
 
+TEST_F(ArtifactDenoiserTest, line_remove_regex_single_char) {
+  char local1[] = "test 1234 rofl";
+  const char local2[] = "test 1234 rofl";
+  artifact::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  artifact::pattern pattern(std::regex("\\d"));
+  line.remove(pattern);
+  ASSERT_EQ(line.str(), local2);
+  ASSERT_EQ(line.mut(), "test  rofl");
+}
+
 TEST_F(ArtifactDenoiserTest, line_remove_regex_multi) {
   char local1[] = "test 1234 1234 rofl";
   const char local2[] = "test 1234 1234 rofl";
@@ -246,6 +256,16 @@ TEST_F(ArtifactDenoiserTest, line_suppress_regex) {
   const char local2[] = "test 1234 rofl";
   artifact::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
   artifact::pattern pattern(std::regex("\\d+"));
+  line.suppress(pattern);
+  ASSERT_EQ(line.str(), local2);
+  ASSERT_EQ(line.mut().size(), 0);
+}
+
+TEST_F(ArtifactDenoiserTest, line_suppress_regex_single) {
+  char local1[] = "test 1234 rofl";
+  const char local2[] = "test 1234 rofl";
+  artifact::line line(nullptr, 0, local1, local2, sizeof(local1) - 1);
+  artifact::pattern pattern(std::regex("\\d"));
   line.suppress(pattern);
   ASSERT_EQ(line.str(), local2);
   ASSERT_EQ(line.mut().size(), 0);

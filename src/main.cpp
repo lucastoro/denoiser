@@ -33,6 +33,8 @@ int main(int argc, char** argv)
     log::enable(log::profile);
   }
 
+  const bool show_lines = not args.have_flag("--no-lines", "-n");
+
 #ifdef WITH_THREAD_POOL
   if (args.have_flag("--jobs", "-j")) {
     const auto count = args.value<size_t>("--jobs", "-j");
@@ -88,7 +90,7 @@ int main(int argc, char** argv)
     std::string current = {};
     denoiser<char_t> denoiser(config);
 
-    denoiser.run([&current](const artifact::wline& line){
+    denoiser.run([&current, show_lines](const artifact::wline& line){
       if (current != line.source().name()) {
         if (!current.empty()) {
           std::cout << "--- end " << current << " ---" << std::endl;
@@ -96,7 +98,11 @@ int main(int argc, char** argv)
         current = line.source().name();
         std::cout << "--- begin " << current << " ---" << std::endl;
       }
-      std::wcout << line.number() << " " << line.str() << std::endl;
+      if (show_lines) {
+        std::wcout << line.number() << " " << line.str() << std::endl;
+      } else {
+        std::wcout << line.str() << std::endl;
+      }
     });
 
   } catch (const std::exception& ex) {
