@@ -109,25 +109,34 @@ considered optional, and secondly the **two** slashes "//" are part of the proto
 This is a simple YAML configuration:
 
 ```
-  filters: # the filter section will discard whole lines
-  - s: 'DEBUG' # this string will cause all lines containing 'DEBUG' to be ignored
-  - r: 'INFO|WARNING' # this reg. expression will cause all matching lines to be ignored
+filters: # the filter section will discard whole lines
+ - s: 'DEBUG' # this string will cause all lines containing 'DEBUG' to be ignored
+ - r: 'INFO|WARNING' # this reg. expression will cause all matching lines to be ignored
 
-  normalizers: # the normalizers section will discard specific portions
-  - s: 'luca' # this string will cause all occurences of 'luca' to be ignored
-  - r: '\\d{2}:\\d{2}:\\d{2}' # this reg. expression will cause all 'dd:mm:ss' dates to be ignored
+normalizers: # the normalizers section will discard specific portions
+ - s: 'luca' # this string will cause all occurences of 'luca' to be ignored
+ - r: '\\d{2}:\\d{2}:\\d{2}' # this reg. expression will cause all 'dd:mm:ss' dates to be ignored
 
-  artifacts:
-  - alias: project-output # a simple mnemonic
-    target: file://output.log # this will load the output.log file from disk
-    reference:"
+artifacts:
+ - alias: project-output # a simple mnemonic
+   target: file://output.log # this will load the output.log file from disk
+   reference:"
     - https://logs.localhost:/succesfull.log # this will download the file via HTTPS
-  - alias: install.log # a simple mnemonic
-    target: file:///var/log/install.log
-    reference:"
+ - alias: install.log # a simple mnemonic
+   target: file:///var/log/install.log
+   reference:"
     - http://logs.localhost:/log-0001.log # here we use 2 different "reference" files
     - http://logs.localhost:/log-0002.log
 ```
+
+### Unicode support
+The project has partial support for unicode, deconding from `UTF-8`. "Partial" means that while full UTF-8 deconding is
+enabled, the application does not try to [normalize the codepoints](https://unicode.org/reports/tr15) in any way.
+If you're an unicode expert, you know that this means that I'm a lazy person, but if you're not, this just means that it
+should be good enough for you.  
+`UTF-8`, `Latin 1` and plain `ASCII` decoders are supported, and will be used both when reading from disk and when
+downloading through http. When downloading the right decoder will be inferred by the `Content-Type` header field, while
+when loading from disk `UTF-8` will be used by default.
 
 ## Small technicalities
 This implementation relies heavily on multi-threading (in particular when built with the `DENOISER_THREAD_POOL` option
