@@ -3,6 +3,8 @@
 #include <iostream>
 #include <sstream>
 
+//#define CUSTOM_ALLOCATOR
+
 namespace log {
 
   using level_t = size_t;
@@ -36,7 +38,7 @@ namespace log {
       return (*this) << ", " << t;
     }
   private:
-
+#ifdef CUSTOM_ALLOCATOR
     template <typename C, size_t N>
     class lallocator {
     public:
@@ -46,7 +48,7 @@ namespace log {
         if (sz > N) {
           throw std::out_of_range("log line too long");
         }
-        return data;
+        return data_;
       }
       inline void deallocate(value_type*, size_type) {
       }
@@ -54,20 +56,27 @@ namespace log {
       struct rebind { typedef lallocator<U,N> other; };
       template <typename U>
       inline bool operator == (const lallocator<U,N>& other) const {
-        return data == other.data;
+        return data_ == other.data_;
       }
       template <typename U>
       inline bool operator != (const lallocator<U,N>& other) const {
-        return data != other.data;
+        return data_ != other.data_;
+      }
+      const C* data() const {
+        return data_;
       }
     private:
-      C data[N];
+      C data_[N];
     };
-
     static constexpr size_t max_length = 1024;
-    using traits = std::char_traits<char>;
-    using allocator = lallocator<char, max_length>;
-    std::basic_stringstream<char, traits, allocator> ss;
+    using allocator_type = lallocator<char, max_length>;
+#else
+    using allocator_type = std::stringstream::allocator_type;
+#endif
+    using traits_type = std::stringstream::traits_type;
+    using char_type = std::stringstream::char_type;
+
+    std::basic_stringstream<char_type, traits_type, allocator_type> ss;
     std::ostream& os;
   };
 } // log
