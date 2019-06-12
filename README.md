@@ -141,8 +141,17 @@ git clone --recursive https://github.com/lucastoro/denoiser.git
 mkdir build
 cd build
 cmake ../denoiser
-make -j [nr of cores]
+make
 ```
+
+### Dependencies & Requirements
+All direct dependencies ([yaml-cpp](https://github.com/jbeder/yaml-cpp),
+[google test](https://github.com/google/googletest) and [curlpp](http://www.curlpp.org/)) are fetched as submodules of
+the project, but curlpp may still need `libcurl` to compile properly; `sudo apt install libcurl4-openssl-dev` or
+`yum install libcurl-devel` or `apk add curl-dev` should do the trick, but check `curlpp` project for more informations.
+
+This is a **C++17** project so a suitable version of the compiler will be needed (`gcc 7` or `clang 4` should do the
+trick), also `CMake 3.8` is required at least.
 
 ## Testing
 When built with the `WITH_TESTS` option enabled (the default) the project will contain a number of unit tests that can
@@ -157,4 +166,5 @@ the test cases inside the container, it may be triggered invoking the `test/run.
 http://www.ranum.com/security/computer_security/papers/ai for the idea.  
 Thanks to **Marco Pensallorto** for the inspiration.
 
+[![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://lbesson.mit-license.org/)
 [![Build Status](https://travis-ci.org/lucastoro/denoiser.svg?branch=master)](https://travis-ci.org/lucastoro/denoiser)
