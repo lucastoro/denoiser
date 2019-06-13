@@ -29,7 +29,6 @@ struct patterns {
 template <typename CharT>
 class configuration {
 public:
-  std::string alias;
   std::string target;
   std::vector<std::string> reference;
   patterns<CharT> rules;
@@ -45,7 +44,6 @@ public:
 private:
   configuration(const YAML::Node& node) {
 
-    alias = node["alias"].as<std::string>();
     target = node["target"].as<std::string>();
 
     for (const auto& ref : node["reference"]) {

@@ -68,8 +68,7 @@ The process output is always written on the standard output stream, while errors
 written on the standard error stream.
 
 ### Configuration file
-The configuration file is a YAML file composed of 5 section:
- - the `alias` section will hold a simple mnemonic name for the processing.
+The configuration file is a YAML file composed of 4 section:
  - the `target` section will tell the algorithm from where to load the target ("bad") log file.
  - the `reference` section holds a list of other artifacts from which to generate the reference table. Note that it
    is possible (though not necessary) to specify multiple "reference" ("good") files from which to build the hash set.
@@ -90,7 +89,7 @@ The configuration file is a YAML file composed of 5 section:
 Each entry in the patterns section may be a string or a regular expression.
 In the YAML file each entry is represented by a `key:value` pair, where the key must be either "s", to indicate that the
 pattern is a string, or a "r" indicating that the pattern is a regular expression.
-Both strings and regular expressions are evaluated case-sensitive, strings will be searched inside
+Both strings and regular expressions are evaluated case-sensitive.
 
 Artifacts can be loaded from the local hard drive or downloaded from the web through the HTTP(S) protocol.
 To specify a local artifact use the `file://` protocol specifier, while when downloading from the web, use either
@@ -116,7 +115,6 @@ normalizers: # the normalizers section will discard specific portions
  - s: 'luca' # this string will cause all occurences of 'luca' to be ignored
  - r: '\\d{2}:\\d{2}:\\d{2}' # this reg. expression will cause all 'dd:mm:ss' dates to be ignored
 
-alias: project-output # a simple mnemonic
 target: file://output.log # this will load the output.log file from disk
 reference:
  - http://logs.localhost:/log-0001.log # here we use 3 different "reference" files, one fetched through HTTP

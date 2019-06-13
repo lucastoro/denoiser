@@ -7,7 +7,6 @@ normalizers:
 - s: 'luca'
 - r: '\d{2}:\d{2}:\d{2}'
 
-alias: artifact1
 target: file://target-1.log
 reference:
 - file://reference-11.log

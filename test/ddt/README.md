@@ -16,12 +16,9 @@ normalizers:
 - s: 'luca'
 - r: '\d{2}:\d{2}:\d{2}'
 
-artifacts:
-- alias: test-env1
-  target: file://target.log
-  reference:
-  - file://ref1.log
----
+target: file://target.log
+reference:
+- file://ref1.log
 ```
 In the same directory there must be a `target.log`, a `ref1.log` (because listed in the `config.yaml`) and an `expect.log` file (because expected by the test suite).  
 The output of the algorithm will be compared to the content of the `expect.log` file.

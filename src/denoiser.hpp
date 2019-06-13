@@ -36,12 +36,11 @@ public:
       size_t count = 0;
       for (const auto& url : config.reference) {
         future.emplace_back(std::async(std::launch::async, [this, &url, &count](){
-          const auto alias = config.alias + " #" + std::to_string(++count);
-          fill_bucket(url, alias, config.rules);
+          fill_bucket(url, config.rules);
         }));
       }
 
-      auto file = prepare(config.target, config.alias, config.rules);
+      auto file = prepare(config.target, config.rules);
 
       for (auto& f : future) {
         f.wait();
@@ -62,29 +61,27 @@ private:
   /**
    * Downloads the file and applies filters and normalizers
    * \param url the remote url to download the file from
-   * \param alias an alias for the file
    * \param rules there rules to apply to normalize the file
    * \return the file ready for analysis
    */
   artifact::basic_file<CharT> prepare(const std::string& url,
-                                      const std::string& alias,
                                       const patterns<CharT>& rules) {
 
     artifact::basic_file<CharT> file;
 
     profile("fetching " + url, [&](){
-      file = artifact::basic_file<CharT>::fetch(url, alias);
+      file = artifact::basic_file<CharT>::fetch(url);
     });
 
-    profile("filtering " + alias, [&](){
+    profile("filtering " + url, [&](){
       filter(file, rules);
     });
 
-    profile("normalizing " + alias, [&](){
+    profile("normalizing " + url, [&](){
       normalize(file, rules);
     });
 
-    profile("calculating hashes for " + alias, [&](){
+    profile("calculating hashes for " + url, [&](){
       compute_hashes(file);
     });
 
@@ -95,14 +92,12 @@ private:
    * Uses prepare() to download and normalize a log file, and then uses it to fill a bucket with
    * its hashes.
    * \param url the remote url to download the file from
-   * \param alias an alias for the file
    * \param rules there rules to apply to normalize the file
   */
   void fill_bucket(const std::string& url,
-                   const std::string& alias,
                    const patterns<CharT>& rules) {
 
-    const auto file = prepare(url, alias, rules);
+    const auto file = prepare(url, rules);
 
     // access to the bucket must be synchronized
     std::lock_guard<std::mutex> lock(mutex);

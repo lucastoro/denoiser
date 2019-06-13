@@ -256,7 +256,7 @@ public:
 
   const basic_file<char_t>& operator = (basic_file<char_t>&& other) {
     if (this != &other) {
-      alias = std::move(other.alias);
+      url = std::move(other.url);
       data = std::move(other.data);
       table = std::move(other.table);
       for (line_t& line : table) {
@@ -300,32 +300,34 @@ public:
     return not table.empty();
   }
 
-  const std::string& name() const {
-      return alias;
-  }
-
 private:
+
   enum source_t {unknown, local, http};
+
 public:
 
-  static basic_file<char_t> download(const std::string& url, const std::string& alias = {}) {
-    return basic_file<char_t>(http, url, alias);
+  static basic_file<char_t> download(const std::string& url) {
+    return basic_file<char_t>(http, url);
   }
 
-  static basic_file<char_t> load(const std::string& url, const std::string& alias = {}) {
-    return basic_file<char_t>(local, url, alias);
+  static basic_file<char_t> load(const std::string& url) {
+    return basic_file<char_t>(local, url);
   }
 
-  static basic_file<char_t> fetch(const std::string& url, const std::string& alias = {}) {
+  static basic_file<char_t> fetch(const std::string& url) {
     switch (from(url)) {
       case http:
-        return download(url, alias);
+        return download(url);
       case local:
-        return load(remove_protocol(url), alias);
+        return load(remove_protocol(url));
       default:
         break;
     }
     throw std::runtime_error("Unknown protocol");
+  }
+
+  const std::string& name() const {
+    return url;
   }
 
 private:
@@ -370,14 +372,12 @@ private:
     }
   }
 
-  inline basic_file(std::istream& stream, const std::string& alias = {})
-      : alias(alias) {
+  inline basic_file(std::istream& stream){
     read_stream(stream);
     build_table();
   }
 
-  inline basic_file(source_t source, const std::string& resource, const std::string& alias = {})
-      : alias(alias) {
+  inline basic_file(source_t source, const std::string& resource) : url(resource) {
     switch (source) {
       case local: {
         std::ifstream stream(resource, std::ios_base::in | std::ios_base::binary);
@@ -477,7 +477,7 @@ private:
     }
   }
 
-  std::string alias;
+  std::string url;
   data_t<char_t> data;
   std::deque<line_t> table;
 };
