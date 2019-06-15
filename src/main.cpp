@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <unistd.h>
 #include <cstdlib>
 #include "artifact.hpp"
@@ -10,6 +11,21 @@
 #ifdef WITH_TESTS
 #  include "test/test.hpp"
 #endif
+
+template <typename T>
+static constexpr std::basic_ostream<T>& get_cout() {
+  return *reinterpret_cast<std::basic_ostream<T>*>(0xdeadbeaf);
+}
+
+template <char>
+static inline constexpr std::basic_ostream<char>& get_cout() {
+  return std::cout;
+}
+
+template <wchar_t>
+static inline constexpr std::basic_ostream<wchar_t>& get_cout() {
+  return std::wcout;
+}
 
 int main(int argc, char** argv) {
   const arguments args(argc, argv);
@@ -70,26 +86,20 @@ int main(int argc, char** argv) {
       ? configuration<char_t>::read(std::cin)
       : configuration<char_t>::load(std::string(config_file));
 
-    std::string current = {};
     denoiser<char_t> denoiser(config);
 
-    denoiser.run([&current, show_lines](const artifact::wline& line){
-      if (current != line.source().name()) {
-        if (!current.empty()) {
-          std::cout << "--- end " << current << " ---" << std::endl;
-        }
-        current = line.source().name();
-        std::cout << "--- begin " << current << " ---" << std::endl;
-      }
+    static auto& cout = get_cout<char_t>();
+
+    denoiser.run([show_lines](const artifact::wline& line){
       if (show_lines) {
-        std::wcout << line.number() << " " << line.str() << std::endl;
+        cout << line.number() << " " << line.str() << std::endl;
       } else {
-        std::wcout << line.str() << std::endl;
+        cout << line.str() << std::endl;
       }
     });
 
   } catch (const std::exception& ex) {
-    std::cerr << "exception got: " << ex.what() << std::endl << std::flush;
+    std::cerr << "exception got: " << ex.what() << std::endl;
   }
   return 0;
 }
