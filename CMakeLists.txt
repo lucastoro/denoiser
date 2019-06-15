@@ -26,7 +26,6 @@ target_link_libraries(${PROJECT_NAME} yaml-cpp)
 target_link_libraries(${PROJECT_NAME} curlpp)
 target_link_libraries(${PROJECT_NAME} pthread)
 
-
 if(DENOISER_THREAD_POOL)
   target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_THREAD_POOL)
 endif()

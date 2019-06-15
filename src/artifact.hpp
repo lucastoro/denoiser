@@ -54,18 +54,20 @@ public:
   using const_iterator = const_pointer;
 
   basic_line() noexcept
-    : ptr_(nullptr), size_(0), number_(0), hash_(0)
+    : ptr_(nullptr), imm_ptr_(nullptr), size_(0), imm_size_(0), file_(nullptr), number_(0), hash_(0)
   {}
 
   basic_line(const basic_file<CharT>* fil, size_t num, char_t* ptr, const char_t* optr, size_t size) noexcept
     : ptr_(ptr), imm_ptr_(optr), size_(size), imm_size_(size), file_(fil), number_(num), hash_(0)
   {}
 
-  basic_line(basic_line&& other) : basic_line() {
+  basic_line(basic_line&& other) noexcept : basic_line() {
     (*this) = std::move(other);
   }
 
-  basic_line& operator = (basic_line&& other) {
+  ~basic_line() = default;
+
+  basic_line& operator = (basic_line&& other) noexcept {
     if (this != &other) {
       ptr_ = std::move(other.ptr_);
       imm_ptr_ = std::move(other.imm_ptr_);
@@ -151,6 +153,7 @@ private:
     inline explicit overwriter(char_t* p) : ptr(p), base(&ptr) {}
     inline overwriter(const overwriter& o) : ptr(o.ptr), base(o.base) {
     }
+    ~overwriter() = default;
     inline char_t* operator ++ (int i) {
       (*base) += i;
       return (*base);
@@ -254,7 +257,7 @@ public:
     (*this) = std::move(other);
   }
 
-  const basic_file<char_t>& operator = (basic_file<char_t>&& other) {
+  basic_file<char_t>& operator = (basic_file<char_t>&& other) {
     if (this != &other) {
       url = std::move(other.url);
       data = std::move(other.data);
@@ -372,7 +375,7 @@ private:
     }
   }
 
-  inline basic_file(std::istream& stream){
+  inline explicit basic_file(std::istream& stream){
     read_stream(stream);
     build_table();
   }
@@ -436,7 +439,7 @@ private:
     return (c == '\n' or c =='\r');
   }
 
-  inline void curl(const std::string url) {
+  inline void curl(const std::string& url) {
     downloader<char_t>(url, *this).perform();
   }
 

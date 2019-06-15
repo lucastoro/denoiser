@@ -17,7 +17,7 @@
 template <typename CharT>
 class denoiser {
 public:
-  denoiser(const configuration<CharT>& art) : config(art) {}
+  explicit denoiser(const configuration<CharT>& art) : config(art) {}
 
   /**
    * Executes the whole process of downloading and simplifying files, preparing the bucket

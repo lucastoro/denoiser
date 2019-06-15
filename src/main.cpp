@@ -11,8 +11,7 @@
 #  include "test/test.hpp"
 #endif
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
   const arguments args(argc, argv);
 
   if (args.have_flag("--help", "-h")) {

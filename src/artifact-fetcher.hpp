@@ -184,7 +184,6 @@ public:
   }
 private:
   using encoding_t = encoding::basic_encoder<char_t>;
-
   encoding::istream_feeder feeder;
   std::istream& stream;
   data_consumer<char_t>& observer;

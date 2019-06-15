@@ -16,7 +16,7 @@ public:
     steady_clock
   >::type;
 
-  profiler(const string_type& name) : name(name), start(clock_type::now()) {
+  explicit profiler(const string_type& name) : name(name), start(clock_type::now()) {
   }
 
   ~profiler() {
@@ -52,6 +52,10 @@ public:
     log_profile << name << " done in " << min << " min " << sec << " sec";
   }
 private:
+  profiler(const profiler&) = delete;
+  profiler(profiler&&) = delete;
+  profiler& operator = (const profiler&) = delete;
+  profiler& operator = (profiler&&) = delete;
   const string_type& name;
   clock_type::time_point start;
 };

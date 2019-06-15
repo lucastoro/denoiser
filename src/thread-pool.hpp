@@ -22,7 +22,7 @@ public:
   /**
    * c'tor, prepares and starts the thread pool
   */
-  thread_pool(size_t threads = 0);
+  explicit thread_pool(size_t threads = 0);
 
   /**
    * d'tor, wait for all the jobs to complete
@@ -89,10 +89,10 @@ public:
     std::vector<thread_pool::id_t> jobs;
     jobs.reserve(runs);
 
-    for (size_t run = 0; run < runs; ++run) {
-      jobs.push_back(submit([&lambda, run, runs, batch_size, &begin, &end](){
-        auto it = std::next(begin, run * batch_size);
-        const auto last = (run == runs - 1) ? end : std::next(it, batch_size);
+    for (size_t r = 0; r < runs; ++r) {
+      jobs.push_back(submit([&lambda, r, runs, batch_size, &begin, &end](){
+        auto it = std::next(begin, r * batch_size);
+        const auto last = (r == runs - 1) ? end : std::next(it, batch_size);
         for(; it != last; ++it) {
           lambda(*it);
         }
@@ -115,6 +115,11 @@ private:
 
   using lock_guard = std::lock_guard<std::mutex>;
   using unique_lock= std::unique_lock<std::mutex>;
+
+  thread_pool(const thread_pool&) = delete;
+  thread_pool(thread_pool&&) = delete;
+  thread_pool& operator = (const thread_pool&) = delete;
+  thread_pool& operator = (thread_pool&&) = delete;
 
   void run();
 

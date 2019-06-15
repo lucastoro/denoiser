@@ -48,6 +48,10 @@ namespace log {
       return (*this) << ", " << t;
     }
   private:
+    line(const line&) = delete;
+    line(line&&) = delete;
+    line& operator = (const line&) = delete;
+    line& operator = (line&&) = delete;
     std::stringstream ss;
     std::ostream& os;
   };

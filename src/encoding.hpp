@@ -10,14 +10,14 @@ namespace encoding {
 
 enum result { ok, error, incomplete, end };
 
-class result_t {
+class result_t final {
 public:
-  result_t(result res) : res_(res), message_() {}
-  result_t(const std::string& message) : res_(error), message_(message) {}
-  result_t(const char* message) : res_(error), message_(message) {}
-  const std::string& message() const { return message_; }
-  result code() const { return res_; }
-  operator int() const { return int(res_); }
+  inline result_t(result res) : res_(res), message_() {}
+  inline result_t(const std::string& message) : res_(error), message_(message) {}
+  inline result_t(const char* message) : res_(error), message_(message) {}
+  inline const std::string& message() const { return message_; }
+  inline result code() const { return res_; }
+  inline operator int() const { return int(res_); }
 
 private:
   result res_;
@@ -37,7 +37,7 @@ public:
 
 class istream_feeder : public feeder {
 public:
-  istream_feeder(std::istream& is) : is(is) {}
+  explicit istream_feeder(std::istream& is) : is(is) {}
   virtual ~istream_feeder() {}
   virtual int get() override { return is.get(); }
   virtual void push(int) override { log_error << "this method does not exists!"; abort(); }
@@ -173,7 +173,7 @@ static basic_encoder<CharT> get(const String& name) {
   for (const auto& enco : encodings) {
     const auto b = enco.first;
     const auto e = enco.first + strlen(enco.first);
-    if (std::equal(name.begin(), name.end(), e, icase_comp)) {
+    if (std::equal(name.begin(), name.end(), b, e, icase_comp)) {
       return enco.second;
     }
   }

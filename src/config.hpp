@@ -42,7 +42,7 @@ public:
   }
 
 private:
-  configuration(const YAML::Node& node) {
+  explicit configuration(const YAML::Node& node) {
 
     target = node["target"].as<std::string>();
 

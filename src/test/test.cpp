@@ -47,15 +47,15 @@ public:
     struct dirent* dirent;
   };
 
-  directory(const char* p) : path(p) {}
-  directory(const std::string& p) : path(p) {}
+  explicit directory(const char* p) : path(p) {}
+  explicit directory(const std::string& p) : path(p) {}
 
   class const_iterator {
   public:
-    const_iterator(std::nullptr_t) : dir(nullptr), dirent(nullptr), path(nullptr) {
+    explicit const_iterator(std::nullptr_t) : dir(nullptr), dirent(nullptr), path(nullptr) {
     }
 
-    const_iterator(const std::string& p) : dir(nullptr), dirent(nullptr), path(&p) {
+    explicit const_iterator(const std::string& p) : dir(nullptr), dirent(nullptr), path(&p) {
 
       dir = opendir(p.c_str());
 
@@ -105,12 +105,12 @@ private:
 
 class pushd final {
 public:
-  pushd(const char* newpath) noexcept (false) : path(cwd()) {
+  explicit pushd(const char* newpath) noexcept (false) : path(cwd()) {
     if (0 != chdir(newpath)) {
       throw std::runtime_error(strerror(errno));
     }
   }
-  pushd(const std::string& newpath) noexcept (false) : pushd(newpath.c_str()) {
+  explicit pushd(const std::string& newpath) noexcept (false) : pushd(newpath.c_str()) {
   }
   ~pushd() noexcept (false) {
     if (0 != chdir(path.c_str())) {
@@ -127,10 +127,6 @@ private:
   std::string path;
 };
 
-class ArtifactDenoiserTest : public testing::Test {
-public:
-};
-
 static std::string ascii(const std::wstring_view& v) {
   std::string s;
   s.reserve(v.size());
@@ -138,9 +134,13 @@ static std::string ascii(const std::wstring_view& v) {
   return s;
 }
 
+class ArtifactDenoiserTest : public testing::Test {
+public:
+};
+
 class DataDrivenTest : public ::testing::Test, public ::testing::WithParamInterface<const char*> {
 public:
-  DataDrivenTest(const std::string& path) : path(path) {}
+  explicit DataDrivenTest(const std::string& path) : path(path) {}
 protected:
   void TestBody() override {
     const pushd dir(path);

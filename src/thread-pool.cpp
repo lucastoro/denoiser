@@ -3,7 +3,7 @@
 size_t thread_pool::max_threads = 0;
 
 thread_pool::thread_pool(size_t threads)
-  : workers(0), stop(false), id_counter(0) {
+  : workers(), stop(false), id_counter(0) {
   unique_lock lock(mutex);
 
   if (0 == threads) {

@@ -1,6 +1,6 @@
 #include "logging.hpp"
 
-#include <time.h>
+#include <ctime>
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
@@ -22,7 +22,7 @@ bool has(level_t lvl) {
 }
 
 const char* log_gettime() {
-  thread_local char temp[128] = "";
+  static thread_local char temp[128] = "";
   struct timeval tv;
   struct tm tm;
   gettimeofday(&tv, nullptr);
