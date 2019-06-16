@@ -1,0 +1,12 @@
+---
+filters: 
+- s: 'DEBUG'
+- r: 'INFO|WARNING'
+
+normalizers: 
+- s: 'luca'
+- r: '\d{2}:\d{2}:\d{2}'
+
+target: https://raw.githubusercontent.com/lucastoro/denoiser/master/test/ddt/01/target.log
+reference:
+- https://raw.githubusercontent.com/lucastoro/denoiser/master/test/ddt/01/ref1.log

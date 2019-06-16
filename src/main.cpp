@@ -12,21 +12,6 @@
 #  include "test/test.hpp"
 #endif
 
-template <typename T>
-static constexpr std::basic_ostream<T>& get_cout() {
-  return *reinterpret_cast<std::basic_ostream<T>*>(0xdeadbeaf);
-}
-
-template <char>
-static inline constexpr std::basic_ostream<char>& get_cout() {
-  return std::cout;
-}
-
-template <wchar_t>
-static inline constexpr std::basic_ostream<wchar_t>& get_cout() {
-  return std::wcout;
-}
-
 int main(int argc, char** argv) {
   const arguments args(argc, argv);
 
@@ -88,13 +73,11 @@ int main(int argc, char** argv) {
 
     denoiser<char_t> denoiser(config);
 
-    static auto& cout = get_cout<char_t>();
-
     denoiser.run([show_lines](const artifact::wline& line){
       if (show_lines) {
-        cout << line.number() << " " << line.str() << std::endl;
+        std::wcout << line.number() << " " << line.str() << std::endl;
       } else {
-        cout << line.str() << std::endl;
+        std::wcout << line.str() << std::endl;
       }
     });
 
