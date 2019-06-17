@@ -144,6 +144,7 @@ cd build
 cmake ../denoiser
 make
 ```
+There is no install target yet, so eventually you can just move the `artifact-denoiser` binary to ~/.loca/bin/ or wherever you want.
 
 ### Dependencies & Requirements
 All direct dependencies ([yaml-cpp](https://github.com/jbeder/yaml-cpp),
@@ -153,6 +154,15 @@ the project, but curlpp may still need `libcurl` to compile properly; `sudo apt 
 
 This is a **C++17** project so a suitable version of the compiler will be needed (`gcc 7` or `clang 4` should do the
 trick), also `CMake 3.8` is required at least.
+
+## Docker
+It is possible to "install" the denoiser as a docker image that will contain all dependencies containarized.
+To create such docker image you can run the `dockerify.sh` script that will download, configure, build and containerize the application in one pass, producing an `artifact-denoiser` image.
+
+Currently `dockerify.sh` can be executed independently from the repository, as it will download the repo itself while running, therefore it is possible to just `wget/curl` the script and run it, the only requirement is the presence of `docker` on the host (and of course the rights to run it). The image is built `FROM scratch` so is pretty small (~8MB at the time of writing).
+
+You can run the image like you would run the binary itself, of course local file access requires using the `-v` option.  
+`docker run --rm artifact-denoiser ...`
 
 ## Testing
 When built with the `WITH_TESTS` option enabled (the default) the project will contain a number of unit tests that can
