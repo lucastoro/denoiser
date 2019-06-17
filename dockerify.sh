@@ -2,6 +2,16 @@
 
 #!/bin/sh
 
+command -v docker &>/dev/null || {
+  echo "docker not found" && exit 1
+}
+
+(docker images | grep '^docker ' | grep latest &>/dev/null) && {
+  DOCKER_IMAGE_EXISTS=true
+} || {
+  DOCKER_IMAGE_EXISTS=false
+}
+
 echo 'YAML_CPP_OPTIONS="-DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_INSTALL=OFF -DMSVC_SHARED_RT=OFF"
 GTETST_OPTIONS="-DINSTALL_GTEST=OFF"
 DENOISER_OPTIONS="-DDENOISER_TESTS=ON"
@@ -26,7 +36,12 @@ RUN apk add --no-cache gcc g++ make cmake git curl-dev
 COPY entrypoint.sh /
 ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]' > Dockerfile
 
-docker build -t denoiser-build .
+docker build -t denoiser-dockerifier .
+result=$?
 rm entrypoint.sh Dockerfile
-docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock denoiser-build
-docker image rm denoiser-build
+[ $result -ne 0 ] && exit $result
+docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock denoiser-dockerifier
+result=$?
+docker image rm denoiser-dockerifier
+$DOCKER_IMAGE_EXISTS || docker image rm docker:latest
+exit $result
