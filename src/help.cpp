@@ -16,8 +16,9 @@ nl "  -p, --profile   print profiling information to stderr"
 nl "  -g, --debug     print even more information to stderr"
 #if WITH_TESTS
 nl "  -t, --test      executes the unit tests"
-nl "  --gtest_*       in combination of --test will be forwarded to the gtest test suite";
+nl "  --gtest_*       in combination of --test will be forwarded to the gtest test suite"
 #endif
+;
 
 #undef nl
 
