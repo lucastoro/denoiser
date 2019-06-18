@@ -1,47 +1,62 @@
-#!/bin/bash
-
 #!/bin/sh
 
-command -v docker &>/dev/null || {
-  echo "docker not found" && exit 1
+YAML_CPP_OPTIONS='-DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_INSTALL=OFF -DMSVC_SHARED_RT=OFF'
+GTETST_OPTIONS='-DINSTALL_GTEST=OFF'
+GLOBAL_OPTIONS='-DCMAKE_BUILD_TYPE=Release'
+CMAKE_OPTIONS="$YAML_CPP_OPTIONS $GTETST_OPTIONS $GLOBAL_OPTIONS"
+MAKE_OPTIONS="-j \$(grep processor /proc/cpuinfo | wc -l)"
+DOCKERIFY_SCRIPT='https://raw.githubusercontent.com/lucastoro/dockerifier/master/dockerify.sh'
+DOCKERIFIER=$(date +%N).sh
+ENTRYPOINT=$(date +%N).sh
+DOCKERFILE=Dockerfile.$(date +%N)
+CONTAINER=denoiser-dockerifier-$(date +%N)
+
+command -v docker || {
+  echo "docker not found"
+  exit 1
 }
 
-(docker images | grep '^docker ' | grep latest &>/dev/null) && {
-  DOCKER_IMAGE_EXISTS=true
-} || {
-  DOCKER_IMAGE_EXISTS=false
+(docker images | grep '^docker ' | grep latest) && DOCKER_IMAGE_EXISTS=true || DOCKER_IMAGE_EXISTS=false
+
+[ -f CMakeLists.txt ] && (grep 'project(artifact-denoiser)' CMakeLists.txt) && LOCAL_REPO=true || LOCAL_REPO=false
+
+$LOCAL_REPO && DOCKER_EXTRA="-v $PWD:/denoiser:ro"
+
+atexit() {
+  rm -f $ENTRYPOINT $DOCKERIFIER $DOCKERFILE
+  docker image rm $CONTAINER
+  $DOCKER_IMAGE_EXISTS || docker image rm docker:latest
 }
 
-echo 'YAML_CPP_OPTIONS="-DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_INSTALL=OFF -DMSVC_SHARED_RT=OFF"
-GTETST_OPTIONS="-DINSTALL_GTEST=OFF"
-DENOISER_OPTIONS="-DDENOISER_TESTS=ON"
-GLOBAL_OPTIONS="-DCMAKE_BUILD_TYPE=Release"
-CMAKE_OPTIONS="$YAML_CPP_OPTIONS $GTETST_OPTIONS $DENOISER_OPTIONS $GLOBAL_OPTIONS"
-MAKE_OPTIONS="-j $(grep processor /proc/cpuinfo | wc -l)"
+set -e
 
+wget $DOCKERIFY_SCRIPT -O $DOCKERIFIER
+
+cat > $ENTRYPOINT << EOF
+#!/bin/sh
 set -ex
-git clone --recurse-submodules --depth 1 https://github.com/lucastoro/denoiser.git
-cd denoiser
-mkdir build
-cd build
-cmake $CMAKE_OPTIONS ..
+$LOCAL_REPO || {
+  git clone --recurse-submodules --depth 1 https://github.com/lucastoro/denoiser.git
+}
+mkdir build && cd build
+cmake $CMAKE_OPTIONS -DDENOISER_TESTS=ON ../denoiser
 make $MAKE_OPTIONS
-./artifact-denoiser -d .. --test
-wget https://raw.githubusercontent.com/lucastoro/dockerifier/b68da4ac2930e98fd52448303933e2759e29ac90/dockerify.sh
-chmod +x ./dockerify.sh
-./dockerify.sh ./artifact-denoiser' > entrypoint.sh
+./artifact-denoiser -d ../denoiser --test
+cmake $CMAKE_OPTIONS -DDENOISER_TESTS=OFF ../denoiser
+make $MAKE_OPTIONS
+strip ./artifact-denoiser
+/$DOCKERIFIER ./artifact-denoiser
+EOF
 
-echo 'FROM docker:latest
+cat > $DOCKERFILE << EOF
+FROM docker:latest
 RUN apk add --no-cache gcc g++ make cmake git curl-dev
-COPY entrypoint.sh /
-ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]' > Dockerfile
+COPY $ENTRYPOINT /
+COPY $DOCKERIFIER /
+RUN chmod +x /$DOCKERIFIER
+ENTRYPOINT ["/bin/sh", "/$ENTRYPOINT"]
+EOF
 
-docker build -t denoiser-dockerifier .
-result=$?
-rm entrypoint.sh Dockerfile
-[ $result -ne 0 ] && exit $result
-docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock denoiser-dockerifier
-result=$?
-docker image rm denoiser-dockerifier
-$DOCKER_IMAGE_EXISTS || docker image rm docker:latest
-exit $result
+trap "atexit" EXIT
+docker build -t $CONTAINER -f $DOCKERFILE .
+docker run --rm -it $DOCKER_EXTRA -v /var/run/docker.sock:/var/run/docker.sock $CONTAINER
