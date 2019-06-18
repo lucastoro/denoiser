@@ -53,7 +53,7 @@ Other flags are used to tune output and behavior:
 --no-lines  -n: do not put line numbers in the output
 --verbose   -v: print information regarding the process (to stderr)
 --profile   -p: print profiling information (to stderr)
---debug     -d: print even more information (to stderr)
+--debug     -g: print even more information (to stderr)
 ```
 When compiled with support for thread pools the following will be available:
 ```

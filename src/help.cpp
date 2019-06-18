@@ -13,7 +13,7 @@ nl "  -n, --no-lines  do not output line numbers in the output"
 nl "  -j, --jobs      use the given number of threads, defaults to the number of hw threads"
 nl "  -v, --verbose   print information regarding the process to stderr"
 nl "  -p, --profile   print profiling information to stderr"
-nl "  -d, --debug     print even more information to stderr"
+nl "  -g, --debug     print even more information to stderr"
 #if WITH_TESTS
 nl "  -t, --test      executes the unit tests"
 nl "  --gtest_*       in combination of --test will be forwarded to the gtest test suite";

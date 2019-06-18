@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
     log::enable(log::info, log::warning);
   }
 
-  if (args.have_flag("--debug", "-d")) {
+  if (args.have_flag("--debug", "-g")) {
     log::enable(log::debug);
   }
 
