@@ -1,6 +1,0 @@
-language: minimal
-services:
-  - docker
-script:
-  - ./test/run.sh
-
